@@ -23,6 +23,7 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 import local_engines
+import frasberg_gpu
 
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
@@ -30,6 +31,7 @@ fs = AsyncIOMotorGridFSBucket(db, bucket_name="voice_samples")
 takes_fs = AsyncIOMotorGridFSBucket(db, bucket_name="voice_takes")
 models_fs = AsyncIOMotorGridFSBucket(db, bucket_name="models3d")
 media_fs = AsyncIOMotorGridFSBucket(db, bucket_name="media")
+frasberg_gpu.init(db)
 
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
@@ -159,6 +161,26 @@ async def frasberg_image(payload: dict) -> str:
     return as_data_url(b64, d.get("mime") or "image/png")
 
 
+async def gpu_image(prompt: str, aspect: Optional[str]) -> Optional[str]:
+    if not await frasberg_gpu.is_online("frasberg-image"):
+        return None
+    try:
+        g = await frasberg_gpu.submit("image", "frasberg-image", prompt, aspect_ratio=aspect or "1:1")
+        for _ in range(240):
+            await asyncio.sleep(0.5)
+            cur = await frasberg_gpu.get_job(g["id"])
+            if cur["status"] == "completed":
+                return as_data_url(base64.b64encode(await frasberg_gpu.output_bytes(cur)).decode(), cur.get("mime") or "image/png")
+            if cur["status"] == "failed":
+                break
+        else:
+            await db.gpu_jobs.update_one({"id": g["id"], "status": "queued"},
+                                         {"$set": {"status": "failed", "error": "Timed out waiting for a GPU worker"}})
+    except HTTPException as e:
+        logger.warning("Frasberg Image GPU failed: %s", e.detail)
+    return None
+
+
 async def image_with_fallback(frasberg_payload: dict, local_fn, *args) -> tuple:
     try:
         return await frasberg_image(frasberg_payload), "frasberg"
@@ -280,8 +302,10 @@ async def me(user: dict = Depends(current_user)):
 async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_user)):
     hint = STYLE_HINTS.get(body.style or "", "")
     full = f"{body.prompt}. {hint}. Aspect ratio {body.aspect_ratio}." if hint else body.prompt
-    img, engine = await image_with_fallback({"prompt": full, "style": body.style, "aspect_ratio": body.aspect_ratio},
-                                            local_engines.generate_image, full, body.aspect_ratio)
+    img, engine = await gpu_image(full, body.aspect_ratio), "frasberg-image"
+    if not img:
+        img, engine = await image_with_fallback({"prompt": full, "style": body.style, "aspect_ratio": body.aspect_ratio},
+                                                local_engines.generate_image, full, body.aspect_ratio)
     doc = await save_generation("generate", body.prompt, img, body.session_id, user, body.style, body.aspect_ratio)
     return {"id": doc["id"], "image_base64": img, "prompt": body.prompt, "style": body.style, "engine": engine}
 
@@ -484,7 +508,7 @@ MUSIC_STYLES = {
     "rock": "rock, electric guitars, live drums", "jazz": "smooth jazz, saxophone, upright bass",
     "hiphop": "hip hop beat, boom bap drums, deep bass", "acoustic": "acoustic folk, guitar, warm",
 }
-MEDIA_LIMITS = {"video": (5, 15), "music": (5, 30)}
+MEDIA_LIMITS = {"video": (3, 15), "music": (5, 30)}
 media_queues = {"video": asyncio.Lock(), "music": asyncio.Lock()}
 
 
@@ -492,12 +516,16 @@ class JobIn(BaseModel):
     prompt: str = Field(min_length=1, max_length=500)
     duration: int = 10
     style: Optional[str] = None
+    model: Optional[str] = None          # Frasberg GPU engine id (video only)
+    aspect_ratio: Optional[str] = "16:9"
+    image_base64: Optional[str] = None   # start frame for image-to-video
 
 
 async def job_out(job: dict) -> dict:
     out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "prompt": job.get("prompt"),
            "style": job.get("style"), "duration": job.get("duration"), "error": job.get("error"),
-           "engine": job.get("render_engine"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
+           "engine": job.get("render_engine"), "model": job.get("model"),
+           "mode": "image-to-video" if job.get("has_image") else None, "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
     if job["status"] == "queued":
         out["queue_position"] = await db.jobs.count_documents(
             {"kind": job["kind"], "engine": "local", "status": {"$in": ["queued", "running"]},
@@ -544,6 +572,47 @@ async def frasberg_video(prompt: str, duration: int) -> Optional[bytes]:
     return None
 
 
+GPU_VIDEO_DEFAULT = "frasberg-motion-fast"
+GPU_VIDEO_ORDER = ["frasberg-motion-fast", "frasberg-motion-pro", "frasberg-motion-ultra"]
+
+
+async def gpu_render_video(job: dict, prompt: str):
+    """Frasberg Serverless GPU first: chosen engine if a worker is online, else any online Frasberg motion engine."""
+    wanted = job.get("model") or GPU_VIDEO_DEFAULT
+    order = [wanted] + [m for m in GPU_VIDEO_ORDER if m != wanted]
+    model = None
+    for m in order:
+        if m in frasberg_gpu.MODELS and await frasberg_gpu.is_online(m):
+            model = m
+            break
+    if not model:
+        return None, None
+    try:
+        g = await frasberg_gpu.submit("video", model, prompt, duration=job["duration"],
+                                      aspect_ratio=job.get("aspect_ratio") or "16:9",
+                                      image_base64=job.get("image_base64"), owner="luchii")
+        await db.jobs.update_one({"id": job["id"]}, {"$set": {"gpu_task": g["id"], "model": model}})
+        for _ in range(720):  # up to 60 min (ultra on a busy queue)
+            await asyncio.sleep(5)
+            cur = await frasberg_gpu.get_job(g["id"])
+            await db.jobs.update_one({"id": job["id"]}, {"$set": {"progress": cur.get("progress")}})
+            if cur["status"] == "completed":
+                return await frasberg_gpu.output_bytes(cur), frasberg_gpu.MODELS[model]["name"]
+            if cur["status"] == "failed":
+                logger.warning("Frasberg GPU %s failed: %s", model, cur.get("error"))
+                return None, None
+            if cur["status"] == "queued" and not await frasberg_gpu.is_online(model):
+                logger.warning("Frasberg GPU %s went offline; falling back", model)
+                await frasberg_gpu.db.gpu_jobs.update_one({"id": g["id"], "status": "queued"},
+                                                          {"$set": {"status": "failed", "error": "No GPU workers online"}})
+                return None, None
+    except HTTPException as e:
+        logger.warning("Frasberg GPU submit failed: %s", e.detail)
+    except Exception:  # noqa: BLE001
+        logger.exception("Frasberg GPU path error; falling back")
+    return None, None
+
+
 async def run_media(job: dict):
     kind = job["kind"]
     async with media_queues[kind]:
@@ -551,11 +620,15 @@ async def run_media(job: dict):
         try:
             if kind == "video":
                 style = VIDEO_STYLES.get(job.get("style") or "", "")
-                data = await frasberg_video(f"{job['prompt']}. {style}" if style else job["prompt"], job["duration"])
-                engine = "frasberg"
+                full = f"{job['prompt']}. {style}" if style else job["prompt"]
+                data, engine = await gpu_render_video(job, full)
+                if data is None:
+                    data = await frasberg_video(full, job["duration"])
+                    engine = "frasberg"
                 if data is None:
                     data = await asyncio.to_thread(local_engines.generate_video, job["prompt"], job["duration"], style)
-                    engine = "luchii-local"
+                    engine = "Frasberg Lite (CPU)"
+                    await db.jobs.update_one({"id": job["id"]}, {"$set": {"has_image": False}})
                 await db.jobs.update_one({"id": job["id"]}, {"$set": {"render_engine": engine}})
                 mime = "video/mp4"
             else:
@@ -575,9 +648,11 @@ async def create_media_job(kind: str, body: JobIn, user: Optional[dict]):
     lo, hi = MEDIA_LIMITS[kind]
     job = {"id": str(uuid.uuid4()), "kind": kind, "engine": "local", "status": "queued", "prompt": body.prompt.strip(),
            "style": body.style, "duration": max(lo, min(hi, body.duration)), "error": None,
+           "model": body.model if kind == "video" else None, "aspect_ratio": body.aspect_ratio or "16:9",
+           "has_image": bool(body.image_base64 and kind == "video"),
            "user_id": user["id"] if user else None, "created_at": now_iso()}
     await db.jobs.insert_one(job.copy())
-    asyncio.create_task(run_media(job))
+    asyncio.create_task(run_media({**job, "image_base64": body.image_base64 if kind == "video" else None}))
     return await job_out(job)
 
 
@@ -950,6 +1025,7 @@ async def engines_status(refresh: bool = False, _: dict = Depends(admin_user)):
 
 
 app.include_router(api)
+app.include_router(frasberg_gpu.router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -999,6 +1075,7 @@ async def startup():
     await db.models3d.create_index("id")
     await db.spaces.create_index("id")
     await db.spaces.create_index([("user_id", 1), ("updated_at", -1)])
+    await frasberg_gpu.ensure_indexes()
     await _resume_interrupted_jobs()
     loop = asyncio.get_running_loop()
     loop.run_in_executor(None, local_engines.warm_up)

@@ -9,7 +9,7 @@ const ENDPOINTS = [
   { method: "POST", path: "/v1/image/upscale", model: "Luchii Prime", status: "Live", desc: "Upscale and enhance to crisp 4K detail." },
   { method: "POST", path: "/v1/audio/tts", model: "Vocalist Prime", status: "Live", desc: "Convert text into natural speech." },
   { method: "POST", path: "/v1/audio/sts", model: "Astral Echo", status: "Live", desc: "Speech-to-speech voice conversion." },
-  { method: "POST", path: "/v1/video/generate", model: "Astral Engine", status: "Live", desc: "Generate cinematic video from a prompt." },
+  { method: "POST", path: "/v1/video/generate", model: "Frasberg Motion", status: "Live", desc: "Generate cinematic video from a prompt." },
   { method: "POST", path: "/v1/spaces/generate", model: "Realmweaver", status: "Live", desc: "Build interactive 3D spaces." },
   { method: "POST", path: "/v1/3d/generate", model: "Sculptor Core", status: "Live", desc: "Generate 3D objects and assets." },
 ];

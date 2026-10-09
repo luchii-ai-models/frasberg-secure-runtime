@@ -1,0 +1,14 @@
+torch>=2.5
+diffusers>=0.35.1
+transformers>=4.51
+accelerate>=1.2
+sentencepiece
+protobuf
+ftfy
+imageio[ffmpeg]>=2.34
+imageio-ffmpeg
+opencv-python-headless
+Pillow
+numpy
+requests
+hf_transfer

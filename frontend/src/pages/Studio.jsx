@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Clapperboard, Music, Loader2, Download } from "lucide-react";
+import { Clapperboard, Music, Loader2, Download, ImagePlus, X, Zap, Sparkles, Crown } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import Navbar from "../components/Navbar";
@@ -18,9 +19,9 @@ const PRESETS = { video: VIDEO_PRESETS, music: MUSIC_PRESETS };
 
 const KINDS = {
   video: {
-    icon: Clapperboard, badge: "Astral Engine · Video Creator · Powered by Frasberg", title: "Turn prompts into", accent: "cinematic video",
-    sub: "Describe a scene, pick a look and a length. Frasberg renders keyframes from your prompt and animates them into a clip.",
-    durations: [5, 10, 15], defaultDuration: 5, eta: (d) => `about ${Math.round(d * 0.6 + 1)}–${Math.round(d * 1.2 + 2)} min`,
+    icon: Clapperboard, badge: "Frasberg Motion · Video Creator", title: "Turn prompts into", accent: "cinematic video",
+    sub: "Describe a scene or drop in a photo to animate it. Pick a Frasberg Motion engine, a look, a format and a length.",
+    durations: [3, 5, 8], defaultDuration: 5, eta: (d) => `about ${Math.round(d * 0.6 + 1)}–${Math.round(d * 1.2 + 2)} min`,
     placeholder: "A red fox running through a snowy forest at dawn...",
     styles: [["cinematic", "Cinematic"], ["photoreal", "Photoreal"], ["anime", "Anime"], ["3d", "3D Animation"], ["noir", "Film Noir"], ["fantasy", "Fantasy"]],
   },
@@ -51,12 +52,63 @@ function Chips({ kind, name, options, value, onChange, render }) {
   );
 }
 
+const ENGINE_ICONS = { fast: Zap, quality: Sparkles, ultra: Crown };
+const ASPECTS = [["16:9", "16:9 Landscape"], ["9:16", "9:16 Vertical"], ["1:1", "1:1 Square"]];
+
+function fmtEta(s) {
+  if (!s) return "";
+  return s < 90 ? `about ${s}s` : `about ${Math.round(s / 60)} min`;
+}
+
+async function toJpegDataUrl(file, max = 1280) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.9);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function EnginePicker({ engines, value, onChange }) {
+  if (!engines.length) return null;
+  return (
+    <div>
+      <label className="text-sm font-medium text-neutral-300 mb-2 block">Engine</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {engines.map((e) => {
+          const Ico = ENGINE_ICONS[e.tier] || Zap;
+          const on = e.status === "online";
+          const sel = value === e.id;
+          return (
+            <button key={e.id} type="button" data-testid={`video-engine-${e.id}`} onClick={() => onChange(e.id)}
+              className={`text-left rounded-xl border p-3 transition-colors ${sel ? "border-[#00F0FF] bg-[#00F0FF]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-semibold"><Ico className="w-3.5 h-3.5 text-[#00F0FF]" />{e.name.replace("Frasberg ", "")}</span>
+                <span data-testid={`video-engine-status-${e.id}`} title={on ? `${e.workers_online} GPU worker(s) online` : "No GPU worker online"}
+                  className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${on ? "text-emerald-400" : "text-neutral-500"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${on ? "bg-emerald-400" : "bg-neutral-600"}`} />{on ? (e.warm ? "warm" : "online") : "offline"}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-neutral-400">{e.blurb}</p>
+              <p className="mt-1 text-[10px] text-neutral-500">{e.resolution} · {fmtEta(e.eta_seconds)}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Progress({ kind, job, eta }) {
   const queued = job.status === "queued";
+  const pct = job.progress ? ` ${Math.round(job.progress * 100)}%` : "";
   return (
     <div className="py-6" data-testid={queued ? `${kind}-queue-notice` : `${kind}-rendering`}>
       <LogoLoader
-        label={queued ? `In the queue: #${job.queue_position || 1}` : kind === "video" ? "Rendering your clip..." : "Composing your track..."}
+        label={queued ? `In the queue: #${job.queue_position || 1}` : kind === "video" ? `Rendering your clip...${pct}` : "Composing your track..."}
         sublabel={queued ? "Another request is finishing first. Yours starts next." : `Powered by Frasberg · ${eta}`} />
     </div>
   );
@@ -71,8 +123,37 @@ export default function Studio({ kind }) {
   const [job, setJob] = useState(null);
   const [busy, setBusy] = useState(false);
   const timer = useRef(null);
+  const fileRef = useRef(null);
+  const [params] = useSearchParams();
+  const [engines, setEngines] = useState([]);
+  const [engine, setEngine] = useState(params.get("engine") || "frasberg-motion-fast");
+  const [aspect, setAspect] = useState("16:9");
+  const [startImage, setStartImage] = useState(null);
 
   useEffect(() => () => clearInterval(timer.current), []);
+  useEffect(() => {
+    if (kind !== "video") return undefined;
+    let alive = true;
+    const load = () => axios.get(`${API}/gpu/v1/engines`)
+      .then(({ data }) => alive && setEngines(data.data.filter((e) => e.kind === "video"))).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [kind]);
+
+  const current = engines.find((e) => e.id === engine);
+  const gpuLive = current?.status === "online";
+  const durations = kind === "video" && gpuLive && current.durations?.length ? current.durations : cfg.durations;
+  useEffect(() => { if (!durations.includes(duration)) setDuration(durations.includes(5) ? 5 : durations[0]); }, [durations, duration]);
+  const etaText = kind === "video" && gpuLive ? fmtEta(current.eta_seconds) : cfg.eta(duration);
+
+  const pickImage = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Please choose an image file."); return; }
+    try { setStartImage(await toJpegDataUrl(f)); } catch { toast.error("Could not read that image."); }
+  };
 
   const poll = (id) => {
     clearInterval(timer.current);
@@ -98,7 +179,10 @@ export default function Studio({ kind }) {
     setBusy(true);
     setJob(null);
     try {
-      const { data } = await axios.post(`${API}/${kind}`, { prompt: prompt.trim(), duration, style }, { headers: authHeader });
+      const body = kind === "video"
+        ? { prompt: prompt.trim(), duration, style, model: engine, aspect_ratio: aspect, image_base64: startImage }
+        : { prompt: prompt.trim(), duration, style };
+      const { data } = await axios.post(`${API}/${kind}`, body, { headers: authHeader });
       setJob(data);
       poll(data.job_id);
     } catch (e) {
@@ -127,16 +211,46 @@ export default function Studio({ kind }) {
           <Textarea data-testid={`${kind}-prompt-input`} value={prompt} onChange={(e) => setPrompt(e.target.value)}
             placeholder={cfg.placeholder} maxLength={500}
             className="min-h-[130px] bg-black/40 border-white/10 text-white resize-none focus-visible:ring-[#00F0FF]" />
+          {kind === "video" && (
+            <div>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickImage} data-testid="video-start-image-input" />
+              {startImage ? (
+                <div className="flex items-center gap-3 rounded-xl border border-[#00F0FF]/40 bg-[#00F0FF]/5 p-2.5" data-testid="video-start-image-preview">
+                  <img src={startImage} alt="Start frame" className="w-16 h-16 rounded-lg object-cover" />
+                  <div className="flex-1 text-xs text-neutral-300"><b className="text-white">Image-to-video</b><br />This photo becomes the first frame and gets animated.</div>
+                  <button type="button" onClick={() => setStartImage(null)} data-testid="video-start-image-remove"
+                    className="p-1.5 rounded-full hover:bg-white/10" aria-label="Remove start image"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileRef.current?.click()} data-testid="video-start-image-btn"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/5 py-3 text-sm text-neutral-300">
+                  <ImagePlus className="w-4 h-4 text-[#00F0FF]" /> Animate a photo (optional start image)
+                </button>
+              )}
+            </div>
+          )}
           <PresetRow presets={PRESETS[kind]} testid={`${kind}-preset`}
             onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
+          {kind === "video" && <EnginePicker engines={engines} value={engine} onChange={setEngine} />}
+          {kind === "video" && current && !gpuLive && (
+            <p className="-mt-2 text-[11px] text-neutral-500" data-testid="video-engine-fallback-note">
+              No {current.name} GPU is online right now, so this clip will render on Frasberg Lite (keyframe animation{startImage ? ", start image not used" : ""}).
+            </p>
+          )}
+          {kind === "video" && (
+            <div>
+              <label className="text-sm font-medium text-neutral-300 mb-2 block">Format</label>
+              <Chips kind={kind} name="aspect" options={ASPECTS} value={aspect} onChange={(v) => setAspect(v || "16:9")} />
+            </div>
+          )}
           <div>
             <label className="text-sm font-medium text-neutral-300 mb-2 block">Style</label>
             <Chips kind={kind} name="style" options={cfg.styles} value={style} onChange={setStyle} />
           </div>
           <div>
             <label className="text-sm font-medium text-neutral-300 mb-2 block">Length</label>
-            <Chips kind={kind} name="duration" options={cfg.durations} value={duration} onChange={setDuration} render={(d) => `${d}s`} />
-            <p className="mt-2 text-xs text-neutral-500" data-testid={`${kind}-eta`}>Takes {cfg.eta(duration)} to render.</p>
+            <Chips kind={kind} name="duration" options={durations} value={duration} onChange={setDuration} render={(d) => `${d}s`} />
+            <p className="mt-2 text-xs text-neutral-500" data-testid={`${kind}-eta`}>Takes {etaText} to render.</p>
           </div>
           <Button onClick={start} disabled={busy} data-testid={`${kind}-generate-btn`}
             className="w-full h-12 bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold rounded-full text-base">
@@ -144,15 +258,15 @@ export default function Studio({ kind }) {
               : <><Icon className="w-4 h-4 mr-2" /> Generate {kind}</>}
           </Button>
 
-          {pending && <Progress kind={kind} job={job} eta={cfg.eta(job.duration || duration)} />}
+          {pending && <Progress kind={kind} job={job} eta={etaText} />}
 
           {src && (
             <div className="pt-2 space-y-3" data-testid={`${kind}-result`}>
               {kind === "video"
-                ? <video src={src} controls autoPlay loop className="w-full rounded-xl border border-white/10" />
+                ? <video src={src} controls autoPlay loop playsInline className={`rounded-xl border border-white/10 ${aspect === "9:16" ? "max-h-[70vh] mx-auto" : "w-full"}`} />
                 : <audio src={src} controls autoPlay className="w-full" />}
               <p className="text-xs text-neutral-500" data-testid={`${kind}-result-meta`}>
-                “{job.prompt}” · {job.style || "no style"} · {job.duration}s
+                “{job.prompt}” · {job.style || "no style"} · {job.duration}s{job.engine ? ` · ${job.engine}` : ""}{job.mode === "image-to-video" ? " · image-to-video" : ""}
               </p>
               <a href={src} download={`luchii-${kind}-${job.job_id.slice(0, 8)}.${kind === "video" ? "mp4" : "wav"}`}
                 data-testid={`${kind}-download-btn`}
