@@ -49,6 +49,41 @@ _shape = None
 _converter = None
 _shape_lock = threading.Lock()
 _convert_lock = threading.Lock()
+# Only ONE heavy engine (SD image/video, Shap-E 3D, MusicGen, OpenVoice) may be
+# resident at a time on this 8GB/2-core CPU pod. _heavy_lock serializes heavy work
+# and _claim() frees the others before a different engine loads, preventing the
+# two-models-resident memory collision that evicts the pod.
+_heavy_lock = threading.RLock()
+
+
+def _claim(keep: str):
+    global _t2i, _i2i, _shape, _shape_i2m, _music
+    freed = []
+    if keep != "image" and _t2i is not None:
+        _t2i = _i2i = None
+        freed.append("image")
+    if keep != "shape" and (_shape is not None or _shape_i2m is not None):
+        _shape = _shape_i2m = None
+        freed.append("shape")
+    if keep != "music" and _music is not None:
+        _music = None
+        freed.append("music")
+    if freed:
+        import gc
+        gc.collect()
+        _release_memory()
+        logger.info("Freed heavy engine(s) %s to make room for %s", freed, keep)
+
+
+def _release_memory():
+    """Return freed heap back to the OS. Python/glibc keep freed arenas by
+    default, so after unloading a multi-GB model the RSS stays high and the next
+    model load spikes past the pod memory limit. malloc_trim forces the release."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # ---------- voice ----------
@@ -106,10 +141,14 @@ def _pipes():
     global _t2i, _i2i
     if _t2i is None:
         import torch
-        from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
+        from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoencoderTiny
         torch.set_num_threads(cpu_threads())
         _t2i = AutoPipelineForText2Image.from_pretrained(IMAGE_MODEL, torch_dtype=torch.float32,
                                                          cache_dir=str(MODELS_DIR / "hf"))
+        # TAESD tiny VAE: ~2x faster decode on CPU vs the full VAE, negligible quality loss.
+        _t2i.vae = AutoencoderTiny.from_pretrained("madebyollin/taesd", torch_dtype=torch.float32,
+                                                   cache_dir=str(MODELS_DIR / "hf"))
+        _t2i.unet = _t2i.unet.to(memory_format=torch.channels_last)
         _t2i.set_progress_bar_config(disable=True)
         _i2i = AutoPipelineForImage2Image.from_pipe(_t2i)
         _i2i.set_progress_bar_config(disable=True)
@@ -117,12 +156,14 @@ def _pipes():
 
 
 def warm_up():
-    """Lightweight boot: only pre-cache the small Piper voice. Heavy models
-    (SD-Turbo, Shap-E, MusicGen, OpenVoice) download/load lazily on first use so
-    boot never spikes RAM+disk at once (that caused OOM restart loops)."""
+    """Lightweight boot: pre-cache only the small Piper voice. Heavy engines
+    (SD-Turbo, Shap-E, MusicGen, OpenVoice) load lazily on first use and only one
+    big model stays resident at a time (see _claim). Pre-loading SD at boot was
+    removed: it permanently held ~2.5GB, leaving too little headroom for Shap-E's
+    ~4GB load on this ~6GB-effective pod and causing evictions."""
     try:
         _voice("nova")
-        logger.info("Luchii voice engine ready; heavy engines load on first use")
+        logger.info("Luchii voice engine ready; image/3D/music/clone load on first use")
     except Exception:  # noqa: BLE001
         logger.exception("Luchii in-house engine warm-up failed")
 
@@ -162,7 +203,8 @@ def thumbnail(b64: str) -> str:
 
 def generate_image(prompt: str, aspect: Optional[str] = "1:1") -> str:
     w, h = ASPECTS.get(aspect or "1:1", ASPECTS["1:1"])
-    with _image_lock:
+    with _heavy_lock, _image_lock:
+        _claim("image")
         t2i, _ = _pipes()
         img = t2i(prompt=prompt, num_inference_steps=1, guidance_scale=0.0, width=w, height=h).images[0]
     return _to_data_url(img)
@@ -171,7 +213,8 @@ def generate_image(prompt: str, aspect: Optional[str] = "1:1") -> str:
 def edit_image(prompt: str, image_b64: str, strength: float = 0.6, longest: int = 512) -> str:
     src = _load_image(image_b64, longest)
     steps = max(2, int(round(1 / strength)) + 1)
-    with _image_lock:
+    with _heavy_lock, _image_lock:
+        _claim("image")
         _, i2i = _pipes()
         img = i2i(prompt=prompt, image=src, num_inference_steps=steps, strength=strength, guidance_scale=0.0).images[0]
     return _to_data_url(img)
@@ -215,18 +258,19 @@ def _shape_pipe(from_image: bool = False):
     if from_image:
         if _shape_i2m is None:
             from diffusers import ShapEImg2ImgPipeline
-            _shape_i2m = _fast_scheduler(ShapEImg2ImgPipeline.from_pretrained(SHAPE_IMG_MODEL, torch_dtype=torch.float32, cache_dir=cache))
+            _shape_i2m = _fast_scheduler(ShapEImg2ImgPipeline.from_pretrained(SHAPE_IMG_MODEL, torch_dtype=torch.float32, low_cpu_mem_usage=True, cache_dir=cache))
         return _shape_i2m
     if _shape is None:
         from diffusers import ShapEPipeline
-        _shape = _fast_scheduler(ShapEPipeline.from_pretrained(SHAPE_MODEL, torch_dtype=torch.float32, cache_dir=cache))
+        _shape = _fast_scheduler(ShapEPipeline.from_pretrained(SHAPE_MODEL, torch_dtype=torch.float32, low_cpu_mem_usage=True, cache_dir=cache))
     return _shape
 
 
 def generate_3d(prompt: str, image_b64: Optional[str] = None) -> bytes:
     import numpy as np
     import trimesh
-    with _shape_lock:
+    with _heavy_lock, _shape_lock:
+        _claim("shape")
         pipe = _shape_pipe(from_image=bool(image_b64))
         source = _load_image(image_b64, 256) if image_b64 else prompt
         guidance = 3.0 if image_b64 else 15.0
@@ -321,7 +365,8 @@ def generate_video(prompt: str, duration: int, style: str = "") -> bytes:
     size = ASPECTS["16:9"]
     n = max(2, round(duration / 2.5))
     keys = []
-    with _image_lock:
+    with _heavy_lock, _image_lock:
+        _claim("image")
         t2i, i2i = _pipes()
         full = lambda b: f"{prompt}, {b}, {style}".strip(", ")  # noqa: E731
         img = t2i(prompt=full(VIDEO_BEATS[0]), num_inference_steps=1, guidance_scale=0.0,
@@ -362,7 +407,8 @@ MUSIC_MODEL = "facebook/musicgen-small"
 def generate_music(prompt: str, duration: int) -> bytes:
     global _music
     import numpy as np
-    with _music_lock:
+    with _heavy_lock, _music_lock:
+        _claim("music")
         if _music is None:
             import torch
             from transformers import AutoProcessor, MusicgenForConditionalGeneration

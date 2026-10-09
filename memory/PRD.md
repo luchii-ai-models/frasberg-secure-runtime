@@ -44,3 +44,12 @@ Import and clone an exact copy of luchii-ai.com (tools, files, database, feature
   - 3D: Shap-E → 4.3MB GLB (glTF binary v2). Text-to-3D has no thumbnail by design (frontend renders GLB in a viewer).
   - Speech-to-Speech (/sts): faster-whisper transcribe + Piper re-voice → 117KB WAV, accurate transcript.
 - 3D Studio (/3d) and Speech-to-Speech (/sts) pages confirmed fully built and loading; both usable without login.
+
+## Update (2026-06, fork — generation speed + memory optimization)
+Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effective memory** (the 8GB cgroup is never the killer — oom_kill stays 0; the pod is evicted at the node/pod level around 6GB). So bf16/fp16 are useless (emulated → slower) and only ~1 big model fits at a time.
+- **Images 2.4x faster (38s → 10–16s):** swapped SD-Turbo's heavy VAE for the TAESD tiny VAE (`madebyollin/taesd`) + `channels_last`. Quality verified unchanged (photorealistic, no artifacts). Same SD pipeline powers **video**, so video keyframes are faster too.
+- **One-heavy-model-resident policy (`_claim` in local_engines.py):** SD (image/video), Shap-E (3D) and MusicGen (music) are mutually exclusive — before a different big engine loads, the others are freed + `gc.collect()` + `libc malloc_trim(0)` to return RSS to the OS. This prevents the two-models-resident spike that was evicting the pod. OpenVoice/Whisper/Piper are small and stay resident.
+- **3D weight caching (the explicit ask):** Shap-E weights persist on disk (`/var/luchii-models/scratch`, no re-download) and the loaded pipeline stays resident across requests, so **repeat 3D requests skip the load and complete reliably** (verified: warm repeat 3D ran with a stable pid). Added `low_cpu_mem_usage=True` to the Shap-E load.
+- **Self-healing first load:** the first Shap-E/MusicGen load has a transient spike that can trip a pod restart on this tight budget. `_resume_interrupted_jobs()` now re-queues interrupted media/3D jobs (bounded to MAX_JOB_ATTEMPTS=3, text-source only for 3D) instead of hard-failing — on retry the model file is warm in cache, the spike is smaller, and the job completes. Verified: a cold 3D job self-healed across a restart and finished (3MB GLB).
+- **Validated end-to-end after changes:** image 10–16s, video MP4, 3D 3MB GLB, music WAV, S2S WAV — all real files, services stable.
+- Note for future: 3D's first cold load remains the only fragile step on this 2-core/~6GB pod. A larger pod (or a dedicated 3D worker) would make it instant and bulletproof.

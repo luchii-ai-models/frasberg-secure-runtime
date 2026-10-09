@@ -915,6 +915,33 @@ app.add_middleware(
 )
 
 
+MAX_JOB_ATTEMPTS = 3
+
+
+async def _resume_interrupted_jobs():
+    """A heavy local engine can trip a transient memory spike while loading and
+    get the pod restarted. Instead of hard-failing interrupted jobs, re-queue them
+    (bounded) so they retry once the model file is warm in cache; give up after
+    MAX_JOB_ATTEMPTS."""
+    async for job in db.jobs.find({"engine": "local", "status": {"$in": ["queued", "running"]}}):
+        attempts = job.get("attempts", 0) + 1
+        if attempts <= MAX_JOB_ATTEMPTS:
+            await db.jobs.update_one({"id": job["id"]}, {"$set": {"status": "queued", "attempts": attempts, "error": None}})
+            job.update({"status": "queued", "attempts": attempts})
+            asyncio.create_task(run_media(job))
+        else:
+            await db.jobs.update_one({"id": job["id"]},
+                                     {"$set": {"status": "failed", "error": "Generation failed after several attempts. Please try again."}})
+    async for m in db.models3d.find({"status": {"$in": ["queued", "running"]}}):
+        attempts = m.get("attempts", 0) + 1
+        if m.get("source") == "text" and m.get("prompt") and attempts <= MAX_JOB_ATTEMPTS:
+            await db.models3d.update_one({"id": m["id"]}, {"$set": {"status": "queued", "attempts": attempts, "error": None}})
+            asyncio.create_task(run_3d(m["id"], m["prompt"], None))
+        else:
+            await db.models3d.update_one({"id": m["id"]},
+                                         {"$set": {"status": "failed", "error": "3D generation failed after several attempts. Please try again."}})
+
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
@@ -928,10 +955,7 @@ async def startup():
     await db.models3d.create_index("id")
     await db.spaces.create_index("id")
     await db.spaces.create_index([("user_id", 1), ("updated_at", -1)])
-    await db.jobs.update_many({"engine": "local", "status": {"$in": ["queued", "running"]}},
-                              {"$set": {"status": "failed", "error": "Interrupted by a server restart. Please try again."}})
-    await db.models3d.update_many({"status": {"$in": ["queued", "running"]}},
-                                  {"$set": {"status": "failed", "error": "Interrupted by a server restart. Please try again."}})
+    await _resume_interrupted_jobs()
     loop = asyncio.get_running_loop()
     loop.run_in_executor(None, local_engines.warm_up)
 
