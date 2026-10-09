@@ -86,3 +86,15 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - The gallery has a Videos tab: each clip card has a player, a badge, replay, share, download and open.
 - Public share page at `/v/:id`. Shared clips use the native share sheet when available, otherwise the link is copied. Studio results also get a Share button.
 - Tests: iteration_10 passed 100% (backend tests in backend/tests/test_videos_api.py).
+
+## Update (2026-10, zero-cost real video)
+- Checked github.com/frasberg-code/frasberg-secure-runtime (now public). Its /api/video only forwards to frasberg.com, and cinematicRenderV2 is an ffmpeg placeholder. It contains no video model or GPU code.
+- Emergent has no GPU hosting. The Sora 2 API was shut down on 2026-09-24. Veo needs a paid Google key, which the user declined (zero cost).
+- New engine **frasberg-motion-free** (LTX-Video 2B, 480p, text-to-video and image-to-video) for free 16GB T4s (Kaggle/Colab). Its calls were checked against diffusers 0.39 with tiny random weights.
+- Worker package moved to /app/backend/frasberg_gpu_worker. The gateway serves its files at /api/gpu/worker/files/{name} (worker secret required).
+- Admin endpoints: /api/gpu-admin/overview and /api/gpu-admin/notebook. The notebook comes pre-filled with the gateway URL and secret, and the gateway must be this server's own host.
+- /status now has a GPU panel: workers, job counts, a free-notebook download and Kaggle steps.
+- Queued GPU jobs expire after 30 minutes (QUEUE_TTL).
+- Honest UI: a "Preview mode" banner shows when no GPU is online, and Lite clips are labelled "Preview · animated stills" (studio, gallery, share page). The engine defaults to Motion Free and auto-selects an online engine.
+- Tests: iteration_11 passed 37/37 backend plus all frontend checks.
+- Preview-only admin test account: admin.tester@luchiiapp.com is in ADMIN_EMAILS in backend/.env.

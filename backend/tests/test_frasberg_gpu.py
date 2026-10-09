@@ -28,12 +28,18 @@ WORKER_H = {"X-Frasberg-Worker-Secret": WORKER_SECRET, "Content-Type": "applicat
 
 # ---------- engines catalogue ----------
 class TestEngines:
-    def test_lists_four_visible_engines(self):
+    def test_lists_five_visible_engines_free_first(self):
         r = requests.get(f"{GPU}/v1/engines", timeout=15)
         assert r.status_code == 200
         data = r.json()["data"]
-        ids = {e["id"] for e in data}
-        assert ids == {"frasberg-motion-fast", "frasberg-motion-pro", "frasberg-motion-ultra", "frasberg-image"}
+        ids = [e["id"] for e in data]
+        assert ids[0] == "frasberg-motion-free"
+        assert set(ids) == {"frasberg-motion-free", "frasberg-motion-fast", "frasberg-motion-pro",
+                            "frasberg-motion-ultra", "frasberg-image"}
+        free = next(e for e in data if e["id"] == "frasberg-motion-free")
+        assert free["tier"] == "free"
+        assert free["durations"] == [3, 4]
+        assert free["min_vram_gb"] == 14
         for e in data:
             for f in ["name", "kind", "tier", "modes", "durations", "status", "workers_online", "warm", "queue_depth"]:
                 assert f in e, f"missing field {f} on {e['id']}"

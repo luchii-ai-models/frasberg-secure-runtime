@@ -1070,10 +1070,15 @@ async def gpu_admin_overview(_: dict = Depends(admin_user)):
 
 
 @api.get("/gpu-admin/notebook")
-async def gpu_admin_notebook(gateway: str, models: str = "frasberg-motion-free", _: dict = Depends(admin_user)):
+async def gpu_admin_notebook(request: Request, gateway: str, models: str = "frasberg-motion-free",
+                             _: dict = Depends(admin_user)):
     import json as _json
+    from urllib.parse import urlparse
     if not re.match(r"^https://[^\s\"']+/api/gpu$", gateway):
         raise HTTPException(status_code=422, detail="gateway must be an https URL ending in /api/gpu")
+    own_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].split(":")[0]
+    if urlparse(gateway).hostname != own_host:
+        raise HTTPException(status_code=422, detail="gateway must point at this Luchii server")
     wanted = [m for m in models.split(",") if m in frasberg_gpu.MODELS]
     nb = frasberg_gpu.build_notebook(gateway, os.environ["FRASBERG_WORKER_SECRET"], ",".join(wanted) or "frasberg-motion-free")
     return Response(content=_json.dumps(nb, indent=1), media_type="application/x-ipynb+json",

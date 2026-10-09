@@ -137,7 +137,7 @@ export default function Studio({ kind }) {
   const fileRef = useRef(null);
   const [params] = useSearchParams();
   const [engines, setEngines] = useState([]);
-  const [engine, setEngine] = useState(params.get("engine") || "frasberg-motion-fast");
+  const [engine, setEngine] = useState(params.get("engine") || "frasberg-motion-free");
   const [aspect, setAspect] = useState("16:9");
   const [startImage, setStartImage] = useState(null);
 
