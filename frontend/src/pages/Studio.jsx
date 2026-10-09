@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Clapperboard, Music, Loader2, Download, ImagePlus, X, Zap, Sparkles, Crown } from "lucide-react";
+import { Clapperboard, Music, Loader2, Download, ImagePlus, X, Zap, Sparkles, Crown, Share2, Shuffle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -8,7 +8,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LogoLoader from "../components/LogoLoader";
 import { PresetRow } from "../components/PresetRow";
-import { VIDEO_PRESETS, MUSIC_PRESETS } from "../presets";
+import { VIDEO_PRESETS, MUSIC_PRESETS, TIKTOK_VIDEO_PRESETS, SURPRISE_VIDEO_IDEAS, PHOTO_MOTION_PRESETS } from "../presets";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 
@@ -50,6 +50,16 @@ function Chips({ kind, name, options, value, onChange, render }) {
       })}
     </div>
   );
+}
+
+const TIKTOK = TIKTOK_VIDEO_PRESETS.map((p) => (p.surprise ? { ...p, icon: Shuffle } : p));
+
+export async function shareVideo(id) {
+  const url = `${window.location.origin}/v/${id}`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "Made with Frasberg Motion", url }); return; } catch (e) { if (e?.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast.success("Share link copied!"); } catch { toast.message(url); }
 }
 
 const ENGINE_ICONS = { fast: Zap, quality: Sparkles, ultra: Crown };
@@ -229,8 +239,25 @@ export default function Studio({ kind }) {
               )}
             </div>
           )}
-          <PresetRow presets={PRESETS[kind]} testid={`${kind}-preset`}
-            onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
+          {kind === "video" && startImage && (
+            <PresetRow presets={PHOTO_MOTION_PRESETS} testid="video-motion" label="Photo motion" hint="one tap animates your photo"
+              onPick={(p) => setPrompt(p.prompt)} />
+          )}
+          {kind === "video" && !startImage && (
+            <PresetRow presets={TIKTOK} testid="video-tiktok" label="Trending" hint="TikTok-style · vertical 9:16"
+              onPick={(p) => {
+                const pick = p.surprise
+                  ? (() => { const pool = SURPRISE_VIDEO_IDEAS.filter((i) => i.prompt !== prompt); return pool[Math.floor(Math.random() * pool.length)]; })()
+                  : p;
+                setPrompt(pick.prompt);
+                if (pick.style) setStyle(pick.style);
+                setAspect("9:16");
+              }} />
+          )}
+          {!(kind === "video" && startImage) && (
+            <PresetRow presets={PRESETS[kind]} testid={`${kind}-preset`}
+              onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
+          )}
           {kind === "video" && <EnginePicker engines={engines} value={engine} onChange={setEngine} />}
           {kind === "video" && current && !gpuLive && (
             <p className="-mt-2 text-[11px] text-neutral-500" data-testid="video-engine-fallback-note">
@@ -273,6 +300,12 @@ export default function Studio({ kind }) {
                 className="flex items-center justify-center w-full h-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-sm">
                 <Download className="w-4 h-4 mr-2" /> Download
               </a>
+              {kind === "video" && (
+                <button type="button" onClick={() => shareVideo(job.job_id)} data-testid="video-share-btn"
+                  className="flex items-center justify-center w-full h-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-sm">
+                  <Share2 className="w-4 h-4 mr-2" /> Share
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search } from "lucide-react";
+import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search, Clapperboard, RotateCcw, ExternalLink } from "lucide-react";
+import { shareVideo } from "./Studio";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { useAuth } from "../context/AuthContext";
@@ -13,6 +14,7 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
 const TABS = [
   { id: "images", label: "Images", icon: ImageIcon },
+  { id: "videos", label: "Videos", icon: Clapperboard },
   { id: "takes", label: "Voice takes", icon: AudioLines },
   { id: "models", label: "3D models", icon: Box },
 ];
@@ -68,6 +70,46 @@ function TakesList({ takes }) {
   );
 }
 
+function VideoCard({ v }) {
+  const ref = React.useRef(null);
+  const src = `${BACKEND}${v.url}`;
+  const replay = () => { const el = ref.current; if (el) { el.currentTime = 0; el.play().catch(() => {}); } };
+  const aspect = v.aspect_ratio === "9:16" ? "aspect-[9/16]" : v.aspect_ratio === "1:1" ? "aspect-square" : "aspect-video";
+  return (
+    <div data-testid={`gallery-video-${v.id}`} className="rounded-xl border border-white/10 bg-[#1E2327] overflow-hidden flex flex-col">
+      <div className={`relative bg-black ${aspect}`}>
+        <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
+          onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
+          className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
+        <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
+          {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
+        </span>
+      </div>
+      <div className="p-3 space-y-2 mt-auto">
+        <p className="text-xs text-neutral-300 line-clamp-2" title={v.prompt}>{v.prompt}</p>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-neutral-500 truncate">{v.engine} · {v.duration}s</span>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button onClick={replay} title="Replay" data-testid={`gallery-video-replay-${v.id}`} className="text-white/70 hover:text-white"><RotateCcw className="w-4 h-4" /></button>
+            <button onClick={() => shareVideo(v.id)} title="Share" data-testid={`gallery-video-share-${v.id}`} className="text-white/70 hover:text-white"><Share2 className="w-4 h-4" /></button>
+            <a href={src} download={`frasberg-motion-${v.id.slice(0, 8)}.mp4`} title="Download" data-testid={`gallery-video-download-${v.id}`} className="text-white/70 hover:text-white"><Download className="w-4 h-4" /></a>
+            <Link to={`/v/${v.id}`} title="Open" data-testid={`gallery-video-open-${v.id}`} className="text-white/70 hover:text-white"><ExternalLink className="w-4 h-4" /></Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VideosList({ videos }) {
+  if (!videos.length) return <Empty text="No Frasberg Motion clips yet." to="/video" cta="Open Video Creator" />;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start" data-testid="gallery-videos">
+      {videos.map((v) => <VideoCard key={v.id} v={v} />)}
+    </div>
+  );
+}
+
 function ModelsList({ models }) {
   const done = models.filter((m) => m.status === "completed");
   if (!done.length) return <Empty text="No 3D models yet." to="/3d" cta="Open 3D Studio" />;
@@ -95,17 +137,20 @@ export default function Gallery() {
   const [tab, setTab] = useState("images");
   const [takes, setTakes] = useState([]);
   const [models, setModels] = useState([]);
+  const [videos, setVideos] = useState([]);
 
   useEffect(() => {
     if (loading) return;
     if (!user) { navigate("/"); return; }
     const load = async () => {
       try {
-        const [res, tk, md] = await Promise.all([
+        const [res, tk, md, vd] = await Promise.all([
           axios.get(`${API}/my/generations`, { headers: authHeader, params: { limit: 60 } }),
           axios.get(`${API}/voice/takes`, { headers: authHeader }).catch(() => ({ data: [] })),
           axios.get(`${API}/3d`, { headers: authHeader, params: { limit: 60 } }).catch(() => ({ data: [] })),
+          axios.get(`${API}/videos`, { headers: authHeader, params: { limit: 60 } }).catch(() => ({ data: [] })),
         ]);
+        setVideos(vd.data);
         setItems(res.data);
         setTakes(tk.data);
         setModels(md.data);
@@ -154,7 +199,7 @@ export default function Gallery() {
           ))}
         </div>
 
-        {!busy && tab === "takes" ? <TakesList takes={takes} /> : !busy && tab === "models" ? <ModelsList models={models} /> : busy ? (
+        {!busy && tab === "videos" ? <VideosList videos={videos} /> : !busy && tab === "takes" ? <TakesList takes={takes} /> : !busy && tab === "models" ? <ModelsList models={models} /> : busy ? (
           <div className="grid place-items-center py-32 text-neutral-500">
             <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF]" />
           </div>

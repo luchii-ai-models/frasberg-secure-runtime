@@ -11,6 +11,7 @@ import Models from "./pages/Models";
 import Legal from "./pages/Legal";
 import TextToSpeech from "./pages/TextToSpeech";
 import ApiDocs from "./pages/ApiDocs";
+import VideoShare from "./pages/VideoShare";
 import Studio from "./pages/Studio";
 import EngineStatus from "./pages/EngineStatus";
 import SpeechToSpeech from "./pages/SpeechToSpeech";
@@ -38,6 +39,7 @@ function App() {
               <Route path="/legal/:doc" element={<Legal />} />
               <Route path="/s/:id" element={<Share />} />
               <Route path="/video" element={<Studio kind="video" />} />
+              <Route path="/v/:id" element={<VideoShare />} />
               <Route path="/audio" element={<Studio kind="music" />} />
               <Route path="/status" element={<EngineStatus />} />
               <Route path="/sts" element={<SpeechToSpeech />} />

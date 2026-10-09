@@ -525,7 +525,7 @@ class JobIn(BaseModel):
 async def job_out(job: dict) -> dict:
     out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "prompt": job.get("prompt"),
            "style": job.get("style"), "duration": job.get("duration"), "error": job.get("error"),
-           "engine": job.get("render_engine"), "model": job.get("model"),
+           "engine": ENGINE_LABELS.get(job.get("render_engine") or "", job.get("render_engine")), "model": job.get("model"),
            "mode": "image-to-video" if job.get("has_image") else None, "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
     if job["status"] == "queued":
         out["queue_position"] = await db.jobs.count_documents(
@@ -673,6 +673,36 @@ async def video(body: JobIn, user: Optional[dict] = Depends(optional_user)):
 @api.post("/music")
 async def music(body: JobIn, user: Optional[dict] = Depends(optional_user)):
     return await create_media_job("music", body, user)
+
+
+ENGINE_LABELS = {"luchii-local": "Frasberg Lite (CPU)", "frasberg": "Frasberg Edge"}
+
+
+def video_card(j: dict) -> dict:
+    return {"id": j["id"], "prompt": j.get("prompt"), "style": j.get("style"), "duration": j.get("duration"),
+            "engine": ENGINE_LABELS.get(j.get("render_engine") or "", j.get("render_engine")) or "Frasberg Lite (CPU)",
+            "model": j.get("model"),
+            "mode": "image-to-video" if j.get("has_image") else "text-to-video",
+            "aspect_ratio": j.get("aspect_ratio") or "16:9", "url": f"/api/media/{j['id']}",
+            "author": j.get("author"), "created_at": j.get("created_at"), "finished_at": j.get("finished_at")}
+
+
+@api.get("/videos")
+async def my_videos(limit: int = 60, user: dict = Depends(current_user)):
+    rows = await db.jobs.find({"kind": "video", "status": "completed", "user_id": user["id"]}, {"_id": 0}) \
+        .sort("created_at", -1).limit(max(1, min(limit, 200))).to_list(200)
+    return [video_card(j) for j in rows]
+
+
+@api.get("/videos/{video_id}")
+async def get_video(video_id: str):
+    j = await db.jobs.find_one({"id": video_id, "kind": "video", "status": "completed"}, {"_id": 0})
+    if not j:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if j.get("user_id") and not j.get("author"):
+        u = await db.users.find_one({"id": j["user_id"]}, {"_id": 0, "name": 1})
+        j["author"] = (u or {}).get("name")
+    return video_card(j)
 
 
 @api.get("/media/{job_id}")
