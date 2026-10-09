@@ -497,12 +497,51 @@ class JobIn(BaseModel):
 async def job_out(job: dict) -> dict:
     out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "prompt": job.get("prompt"),
            "style": job.get("style"), "duration": job.get("duration"), "error": job.get("error"),
-           "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
+           "engine": job.get("render_engine"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
     if job["status"] == "queued":
         out["queue_position"] = await db.jobs.count_documents(
             {"kind": job["kind"], "engine": "local", "status": {"$in": ["queued", "running"]},
              "created_at": {"$lt": job["created_at"]}}) + 1
     return out
+
+
+def is_sample_url(url: str) -> bool:
+    return not url or any(h in url.lower() for h in SAMPLE_HOSTS)
+
+
+async def frasberg_video(prompt: str, duration: int) -> Optional[bytes]:
+    """Ask the Frasberg Video Engine for a render. Returns MP4 bytes only for a genuine, prompt-specific render;
+    returns None when Frasberg hands back a public stock sample or fails, so the caller falls back."""
+    try:
+        r, ki = await frasberg("POST", "/generate/video", {"prompt": prompt, "duration": duration,
+                                                           "output_format": "mp4"}, feature="video")
+        task = r.json().get("task_id")
+        if not task:
+            return None
+        for _ in range(60):  # up to ~5 min
+            await asyncio.sleep(5)
+            jr, _ = await frasberg("GET", f"/jobs/{task}", key_index=ki)
+            d = jr.json()
+            if d.get("status") == "failed":
+                logger.warning("Frasberg video job failed: %s", d.get("error"))
+                return None
+            if d.get("status") == "completed":
+                url = d.get("video_url") or (d.get("result") or {}).get("url") or ""
+                if is_sample_url(url):
+                    logger.warning("Frasberg video returned a stock sample (%s); rejecting", url)
+                    return None
+                if url.startswith("/"):
+                    url = FRASBERG_BASE.rsplit("/api", 1)[0] + url
+                async with httpx.AsyncClient(timeout=120, follow_redirects=True) as hc:
+                    vr = await hc.get(url, headers={"Authorization": f"Bearer {FRASBERG_KEYS[ki]}"})
+                if vr.status_code == 200 and len(vr.content) > 1000:
+                    return vr.content
+                return None
+    except HTTPException as e:
+        logger.warning("Frasberg video unavailable (%s)", e.detail)
+    except Exception:  # noqa: BLE001
+        logger.exception("Frasberg video error")
+    return None
 
 
 async def run_media(job: dict):
@@ -511,8 +550,13 @@ async def run_media(job: dict):
         await db.jobs.update_one({"id": job["id"]}, {"$set": {"status": "running", "started_at": now_iso()}})
         try:
             if kind == "video":
-                data = await asyncio.to_thread(local_engines.generate_video, job["prompt"], job["duration"],
-                                               VIDEO_STYLES.get(job.get("style") or "", ""))
+                style = VIDEO_STYLES.get(job.get("style") or "", "")
+                data = await frasberg_video(f"{job['prompt']}. {style}" if style else job["prompt"], job["duration"])
+                engine = "frasberg"
+                if data is None:
+                    data = await asyncio.to_thread(local_engines.generate_video, job["prompt"], job["duration"], style)
+                    engine = "luchii-local"
+                await db.jobs.update_one({"id": job["id"]}, {"$set": {"render_engine": engine}})
                 mime = "video/mp4"
             else:
                 style = MUSIC_STYLES.get(job.get("style") or "", "")
@@ -815,7 +859,7 @@ async def probe_job(path: str, payload: dict, kind: str):
         d = jr.json()
         if d.get("status") == "completed":
             url = d.get("video_url") or (d.get("result") or {}).get("url") or ""
-            if kind == "video" and (not url or any(h in url.lower() for h in SAMPLE_HOSTS)):
+            if kind == "video" and is_sample_url(url):
                 return "degraded", f"Returns public sample file instead of a render ({url.split('/')[2] if '//' in url else 'no url'})"
             return "online", "Jobs completing"
         if d.get("status") == "failed":

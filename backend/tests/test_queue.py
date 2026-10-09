@@ -4,7 +4,7 @@ import threading
 import time
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://luchii-secure.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://fal-video-studio-1.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
 

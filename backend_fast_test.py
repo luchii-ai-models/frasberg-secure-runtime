@@ -10,7 +10,7 @@ import base64
 import uuid
 
 # Configuration
-BASE_URL = "https://luchii-secure.preview.emergentagent.com/api"
+BASE_URL = "https://fal-video-studio-1.preview.emergentagent.com/api"
 TEST_EMAIL = "test@luchii.ai"
 TEST_PASSWORD = "Test1234!"
 
