@@ -6,11 +6,15 @@ import { Textarea } from "../components/ui/textarea";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LogoLoader from "../components/LogoLoader";
+import { PresetRow } from "../components/PresetRow";
+import { VIDEO_PRESETS, MUSIC_PRESETS } from "../presets";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 
 const BASE = process.env.REACT_APP_BACKEND_URL;
 const API = `${BASE}/api`;
+
+const PRESETS = { video: VIDEO_PRESETS, music: MUSIC_PRESETS };
 
 const KINDS = {
   video: {
@@ -123,6 +127,8 @@ export default function Studio({ kind }) {
           <Textarea data-testid={`${kind}-prompt-input`} value={prompt} onChange={(e) => setPrompt(e.target.value)}
             placeholder={cfg.placeholder} maxLength={500}
             className="min-h-[130px] bg-black/40 border-white/10 text-white resize-none focus-visible:ring-[#00F0FF]" />
+          <PresetRow presets={PRESETS[kind]} testid={`${kind}-preset`}
+            onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
           <div>
             <label className="text-sm font-medium text-neutral-300 mb-2 block">Style</label>
             <Chips kind={kind} name="style" options={cfg.styles} value={style} onChange={setStyle} />

@@ -7,6 +7,8 @@ import { Input } from "../components/ui/input";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LogoLoader from "../components/LogoLoader";
+import { PresetRow } from "../components/PresetRow";
+import { MODEL3D_PRESETS } from "../presets";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 
@@ -188,6 +190,11 @@ export default function Studio3D() {
             className="h-12 px-8 bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold rounded-full">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4 mr-2" /> Generate 3D</>}
           </Button>
+        </div>
+
+        <div className="mt-4">
+          <PresetRow presets={MODEL3D_PRESETS} testid="model-preset"
+            onPick={(p) => { setMode("text"); setPrompt(p.prompt); }} />
         </div>
 
         <div className="mt-6 relative rounded-2xl border border-white/10 bg-[#11161A] aspect-video grid place-items-center overflow-hidden">

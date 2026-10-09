@@ -9,6 +9,8 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
 import { genStyles, genAspects, promptSuggestions, brand } from "../mock";
+import { PresetRow } from "../components/PresetRow";
+import { IMAGE_PRESETS } from "../presets";
 import { useAuth } from "../context/AuthContext";
 import LogoLoader from "../components/LogoLoader";
 
@@ -259,6 +261,8 @@ export default function Generator() {
 
             {mode === "text" && (
               <>
+                <PresetRow presets={IMAGE_PRESETS} testid="image-preset"
+                  onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
                 <div>
                   <label className="text-sm font-medium mb-2 block">Style</label>
                   <div className="flex flex-wrap gap-2">
