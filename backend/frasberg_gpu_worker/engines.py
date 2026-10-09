@@ -4,6 +4,7 @@ frasberg-motion-fast   LTX-Video 0.9.7 distilled + spatial latent upscaler (2-st
 frasberg-motion-pro    Wan 2.2 TI2V-5B (text- and image-to-video, 720p/24fps)
 frasberg-motion-ultra  HunyuanVideo 13B (T2V) / HunyuanVideo-I2V
 frasberg-image         FLUX.1-schnell (4 steps)
+frasberg-motion-free   LTX-Video 2B (T2V + I2V) - fits a free 16GB T4 (Kaggle / Colab)
 frasberg-dev-test      procedural test pattern (CPU, protocol self-test only)
 """
 import gc
@@ -13,13 +14,14 @@ import tempfile
 import threading
 
 MIN_VRAM = {"frasberg-motion-fast": 24, "frasberg-motion-pro": 24, "frasberg-motion-ultra": 80,
-            "frasberg-image": 16, "frasberg-dev-test": 0}
+            "frasberg-image": 16, "frasberg-motion-free": 14, "frasberg-dev-test": 0}
 
 REPOS = {
     "frasberg-motion-fast": ("Lightricks/LTX-Video-0.9.7-distilled", "Lightricks/ltxv-spatial-upscaler-0.9.7"),
     "frasberg-motion-pro": ("Wan-AI/Wan2.2-TI2V-5B-Diffusers",),
     "frasberg-motion-ultra": ("hunyuanvideo-community/HunyuanVideo", "hunyuanvideo-community/HunyuanVideo-I2V"),
     "frasberg-image": ("black-forest-labs/FLUX.1-schnell",),
+    "frasberg-motion-free": ("Lightricks/LTX-Video",),
 }
 NEGATIVE = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, deformed"
 
@@ -83,6 +85,12 @@ def _load(model):
     if model == "frasberg-image":
         from diffusers import FluxPipeline
         return {"pipe": _place(FluxPipeline.from_pretrained(REPOS[model][0], torch_dtype=bf16), model)}
+    if model == "frasberg-motion-free":
+        from diffusers import LTXImageToVideoPipeline, LTXPipeline
+        t2v = LTXPipeline.from_pretrained(REPOS[model][0], torch_dtype=bf16)
+        t2v.vae.enable_tiling()
+        # Both pipelines share the same modules; CPU offload (16GB T4) is attached to whichever one runs next.
+        return {"t2v": t2v, "i2v": LTXImageToVideoPipeline(**t2v.components), "active": None}
     if model == "frasberg-dev-test":
         return {}
     raise ValueError(f"Unknown Frasberg engine {model}")
@@ -181,6 +189,21 @@ def render(model, *, prompt, negative_prompt=None, duration=5, aspect_ratio="16:
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             return buf.getvalue(), "image/png"
+        if model == "frasberg-motion-free":
+            h, w = _size(aspect_ratio, 704, 480, 32) if aspect_ratio in ("16:9", "9:16") else (512, 512)
+            n = _frames(duration, 24, 8, 120)
+            common = dict(prompt=prompt, negative_prompt=neg, height=h, width=w, num_frames=n, num_inference_steps=30,
+                          decode_timestep=0.03, decode_noise_scale=0.025, generator=_gen(seed),
+                          callback_on_step_end=_cb(progress, 30))
+            key = "i2v" if image is not None else "t2v"
+            if pipes["active"] != key:
+                import torch
+                if torch.cuda.is_available():
+                    pipes[key].enable_model_cpu_offload()
+                pipes["active"] = key
+            extra = {"image": _fit(image, h, w)} if image is not None else {}
+            frames = pipes[key](**common, **extra).frames[0]
+            return _mp4(frames, 24), "video/mp4"
         if model == "frasberg-dev-test":
             return _dev_test(prompt, duration, image, progress), "video/mp4"
     raise ValueError(f"Unknown Frasberg engine {model}")

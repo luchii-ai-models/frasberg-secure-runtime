@@ -1,5 +1,5 @@
 import os,sys,time,requests
-sys.path.insert(0,'/app/frasberg_gpu_worker'); import engines
+sys.path.insert(0,'/app/backend/frasberg_gpu_worker'); import engines
 A=os.environ['API']+'/api/gpu';W='e2e-fast';H={'X-Frasberg-Worker-Secret':os.environ['SEC'],'X-Frasberg-Worker-Id':W}
 M=sys.argv[1]
 end=time.time()+float(sys.argv[2])

@@ -1,15 +1,18 @@
 """Pre-download Frasberg engine weights into HF_HOME so the first job has no download wait.
 
-Usage: python prefetch.py frasberg-motion-fast frasberg-image
+Only the files each diffusers pipeline needs are fetched (repos like Lightricks/LTX-Video also host very
+large extra checkpoints that are skipped).
+
+Usage: python prefetch.py frasberg-motion-free frasberg-image
 """
 import sys
 
-from huggingface_hub import snapshot_download
+from diffusers import DiffusionPipeline
 
 from engines import REPOS
 
 for model in sys.argv[1:] or list(REPOS):
     for repo in REPOS.get(model, ()):
         print(f"[{model}] downloading {repo} ...", flush=True)
-        snapshot_download(repo)
+        DiffusionPipeline.download(repo)
 print("done")

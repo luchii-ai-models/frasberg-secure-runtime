@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Clapperboard, Music, Loader2, Download, ImagePlus, X, Zap, Sparkles, Crown, Share2, Shuffle } from "lucide-react";
+import { Clapperboard, Music, Loader2, Download, ImagePlus, X, Zap, Sparkles, Crown, Share2, Shuffle, Gift, Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -62,7 +62,8 @@ export async function shareVideo(id) {
   try { await navigator.clipboard.writeText(url); toast.success("Share link copied!"); } catch { toast.message("Copy this link to share", { description: url, duration: 10000 }); }
 }
 
-const ENGINE_ICONS = { fast: Zap, quality: Sparkles, ultra: Crown };
+const ENGINE_ICONS = { fast: Zap, quality: Sparkles, ultra: Crown, free: Gift };
+export const isPreviewEngine = (engine) => !engine || /lite/i.test(engine);
 const ASPECTS = [["16:9", "16:9 Landscape"], ["9:16", "9:16 Vertical"], ["1:1", "1:1 Square"]];
 
 function fmtEta(s) {
@@ -87,7 +88,7 @@ function EnginePicker({ engines, value, onChange }) {
   return (
     <div>
       <label className="text-sm font-medium text-neutral-300 mb-2 block">Engine</label>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {engines.map((e) => {
           const Ico = ENGINE_ICONS[e.tier] || Zap;
           const on = e.status === "online";
@@ -145,12 +146,21 @@ export default function Studio({ kind }) {
     if (kind !== "video") return undefined;
     let alive = true;
     const load = () => axios.get(`${API}/gpu/v1/engines`)
-      .then(({ data }) => alive && setEngines(data.data.filter((e) => e.kind === "video"))).catch(() => {});
+      .then(({ data }) => {
+        if (!alive) return;
+        const vids = data.data.filter((e) => e.kind === "video");
+        setEngines(vids);
+        // No engine requested in the URL: jump to the first engine that can render real motion right now.
+        if (!params.get("engine")) {
+          setEngine((cur) => (vids.find((e) => e.id === cur)?.status === "online" ? cur : (vids.find((e) => e.status === "online") || {}).id || cur));
+        }
+      }).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { alive = false; clearInterval(t); };
-  }, [kind]);
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const anyGpuOnline = engines.some((e) => e.status === "online");
   const current = engines.find((e) => e.id === engine);
   const gpuLive = current?.status === "online";
   const durations = kind === "video" && gpuLive && current.durations?.length ? current.durations : cfg.durations;
@@ -259,10 +269,18 @@ export default function Studio({ kind }) {
               onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
           )}
           {kind === "video" && <EnginePicker engines={engines} value={engine} onChange={setEngine} />}
-          {kind === "video" && current && !gpuLive && (
+          {kind === "video" && current && !gpuLive && anyGpuOnline && (
             <p className="-mt-2 text-[11px] text-neutral-500" data-testid="video-engine-fallback-note">
-              No {current.name} GPU is online right now, so this clip will render on Frasberg Lite (keyframe animation{startImage ? ", start image not used" : ""}).
+              {current.name} is offline right now. Your clip will go to the next online Frasberg Motion engine.
             </p>
+          )}
+          {kind === "video" && engines.length > 0 && !anyGpuOnline && (
+            <div className="-mt-1 flex gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3 text-xs text-amber-100/90" data-testid="video-preview-mode-banner">
+              <Info className="w-4 h-4 shrink-0 text-amber-300 mt-0.5" />
+              <span><b className="text-amber-200">Preview mode:</b> no Frasberg Motion GPU is online right now, so clips render as
+                <b> animated stills</b> (camera moves over AI keyframes, not real motion){startImage ? " and your start photo isn't used" : ""}.
+                Real motion switches on automatically when a Frasberg GPU comes online.</span>
+            </div>
           )}
           {kind === "video" && (
             <div>
@@ -292,6 +310,11 @@ export default function Studio({ kind }) {
               {kind === "video"
                 ? <video src={src} controls autoPlay loop playsInline className={`rounded-xl border border-white/10 ${aspect === "9:16" ? "max-h-[70vh] mx-auto" : "w-full"}`} />
                 : <audio src={src} controls autoPlay className="w-full" />}
+              {kind === "video" && isPreviewEngine(job.engine) && (
+                <span data-testid="video-preview-badge" className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-200">
+                  <Info className="w-3 h-3" /> Preview · animated stills
+                </span>
+              )}
               <p className="text-xs text-neutral-500" data-testid={`${kind}-result-meta`}>
                 “{job.prompt}” · {job.style || "no style"} · {job.duration}s{job.engine ? ` · ${job.engine}` : ""}{job.mode === "image-to-video" ? " · image-to-video" : ""}
               </p>

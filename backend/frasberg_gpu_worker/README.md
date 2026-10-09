@@ -5,9 +5,16 @@ This is Frasberg's own serverless GPU runtime. GPU machines run this worker. It 
 machine needs no inbound ports and no database access. A node can be added or removed at any time, and the
 queue keeps going.
 
+## Zero-cost option: free Kaggle / Colab GPU
+As an admin, open `/status` → **Frasberg GPU** → **Free GPU worker notebook**. The notebook it downloads already contains
+the gateway URL and worker secret. Import it into Kaggle (Accelerator **GPU T4 x1**, Internet **On**; 30 free GPU-hours
+a week) or Colab (T4), then click **Run All**. **Frasberg Motion Free** (LTX-Video 2B, 480p, text-to-video and
+image-to-video) goes online in the Video Creator. When the session ends, run it again.
+
 ## Engines
 | Engine id | Name | Modes | GPU |
 |---|---|---|---|
+| `frasberg-motion-free` | Frasberg Motion Free | text-to-video, image-to-video, 480p | free 16GB T4 (Kaggle/Colab) |
 | `frasberg-motion-fast` | Frasberg Motion Fast | text-to-video, image-to-video | 24GB+ (L4/A10/4090), best on 48-80GB |
 | `frasberg-motion-pro` | Frasberg Motion Pro | text-to-video, image-to-video, 720p/24fps | 24GB+ |
 | `frasberg-motion-ultra` | Frasberg Motion Ultra | text-to-video, image-to-video | 80GB (A100/H100) |
@@ -15,6 +22,7 @@ queue keeps going.
 
 ## Run on a GPU machine
 ```bash
+cd backend/frasberg_gpu_worker
 docker build -t frasberg-gpu-worker .
 docker run --gpus all -d --restart unless-stopped \
   -v frasberg-models:/models \

@@ -582,7 +582,7 @@ async def frasberg_video(prompt: str, duration: int) -> Optional[bytes]:
 
 
 GPU_VIDEO_DEFAULT = "frasberg-motion-fast"
-GPU_VIDEO_ORDER = ["frasberg-motion-fast", "frasberg-motion-pro", "frasberg-motion-ultra"]
+GPU_VIDEO_ORDER = ["frasberg-motion-fast", "frasberg-motion-pro", "frasberg-motion-ultra", "frasberg-motion-free"]
 
 
 async def gpu_render_video(job: dict, prompt: str):
@@ -1061,6 +1061,23 @@ async def engines_status(refresh: bool = False, _: dict = Depends(admin_user)):
     data = {"checked_at": now_iso(), "engines": engines}
     _status_cache.update(data=data, t=time.monotonic())
     return data
+
+
+@api.get("/gpu-admin/overview")
+async def gpu_admin_overview(_: dict = Depends(admin_user)):
+    return {"workers": await frasberg_gpu.recent_workers(), "jobs": await frasberg_gpu.job_stats(),
+            "engines": (await frasberg_gpu.engines())["data"]}
+
+
+@api.get("/gpu-admin/notebook")
+async def gpu_admin_notebook(gateway: str, models: str = "frasberg-motion-free", _: dict = Depends(admin_user)):
+    import json as _json
+    if not re.match(r"^https://[^\s\"']+/api/gpu$", gateway):
+        raise HTTPException(status_code=422, detail="gateway must be an https URL ending in /api/gpu")
+    wanted = [m for m in models.split(",") if m in frasberg_gpu.MODELS]
+    nb = frasberg_gpu.build_notebook(gateway, os.environ["FRASBERG_WORKER_SECRET"], ",".join(wanted) or "frasberg-motion-free")
+    return Response(content=_json.dumps(nb, indent=1), media_type="application/x-ipynb+json",
+                    headers={"Content-Disposition": 'attachment; filename="frasberg-free-gpu-worker.ipynb"'})
 
 
 app.include_router(api)

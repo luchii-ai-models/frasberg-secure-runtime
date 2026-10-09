@@ -18,6 +18,7 @@ Jobs live in Mongo (`gpu_jobs`), outputs in GridFS (`gpu_outputs`), workers in `
 """
 import base64
 import os
+from pathlib import Path
 import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -31,6 +32,12 @@ router = APIRouter(prefix="/api/gpu")
 
 # Public Frasberg engine catalogue. `built_on` is kept for licence attribution (see worker NOTICE.md).
 MODELS = {
+    "frasberg-motion-free": {
+        "name": "Frasberg Motion Free", "kind": "video", "tier": "free", "modes": ["text-to-video", "image-to-video"],
+        "durations": [3, 4], "resolution": "480p · 24fps", "eta_seconds": 240, "min_vram_gb": 14,
+        "built_on": "LTX-Video 2B (Lightricks)",
+        "blurb": "Real AI motion on free GPUs (Kaggle / Colab T4). Zero cost, a little slower.",
+    },
     "frasberg-motion-fast": {
         "name": "Frasberg Motion Fast", "kind": "video", "tier": "fast", "modes": ["text-to-video", "image-to-video"],
         "durations": [3, 5, 8], "resolution": "768p", "eta_seconds": 45, "min_vram_gb": 24,
@@ -66,6 +73,7 @@ ASPECTS = {"16:9", "9:16", "1:1"}
 WORKER_TTL = 45          # seconds without a heartbeat before a worker counts as offline
 JOB_LEASE = 180          # seconds without progress before a running job is re-queued
 MAX_ATTEMPTS = 3
+QUEUE_TTL = 1800       # seconds a queued job may wait for a worker
 MAX_CHUNK = 4 * 1024 * 1024
 
 db = None
@@ -130,7 +138,12 @@ async def _queue_depth(model: str) -> int:
 
 
 async def _requeue_stale():
-    """Re-queue running jobs whose worker vanished (lease expired); fail after MAX_ATTEMPTS."""
+    """Re-queue running jobs whose worker vanished (lease expired); fail after MAX_ATTEMPTS.
+    Queued jobs nobody picked up within QUEUE_TTL expire so a worker coming online later never renders stale work."""
+    await db.gpu_jobs.update_many(
+        {"status": "queued", "created_at": {"$lt": _iso(_now() - timedelta(seconds=QUEUE_TTL))}},
+        {"$set": {"status": "failed", "error": "No Frasberg GPU worker picked this job up in time",
+                  "finished_at": _iso(_now())}})
     cutoff = _iso(_now() - timedelta(seconds=JOB_LEASE))
     async for j in db.gpu_jobs.find({"status": "running", "lease_at": {"$lt": cutoff}}, {"_id": 0}):
         if j.get("attempts", 0) >= MAX_ATTEMPTS:
@@ -300,6 +313,18 @@ class FailIn(BaseModel):
     retryable: bool = False
 
 
+WORKER_DIR = Path(__file__).parent / "frasberg_gpu_worker"
+WORKER_FILES = {"worker.py", "engines.py", "prefetch.py", "requirements-gpu.txt", "README.md", "NOTICE.md", "Dockerfile"}
+
+
+@router.get("/worker/files/{name}", dependencies=[Depends(worker_auth)])
+async def worker_file(name: str):
+    """Serve the worker source so a fresh GPU box (e.g. a free Kaggle/Colab notebook) can bootstrap itself."""
+    if name not in WORKER_FILES or not (WORKER_DIR / name).is_file():
+        raise HTTPException(status_code=404, detail="Unknown worker file")
+    return Response(content=(WORKER_DIR / name).read_bytes(), media_type="text/plain; charset=utf-8")
+
+
 @router.post("/worker/heartbeat", dependencies=[Depends(worker_auth)])
 async def heartbeat(body: HeartbeatIn, request: Request):
     models = [m for m in body.models if m in MODELS]
@@ -381,3 +406,78 @@ async def fail(job_id: str, body: FailIn):
         {"status": "failed", "error": body.error[:500], "finished_at": _iso(_now())})})
     await db.gpu_chunks.delete_many({"job_id": job_id})
     return {"ok": True, "requeued": retry}
+
+
+# ---------- free GPU bootstrap (Kaggle / Colab notebook) ----------
+def _cell(kind: str, src: str) -> dict:
+    c = {"cell_type": kind, "metadata": {}, "source": src.strip("\n").splitlines(keepends=True)}
+    if kind == "code":
+        c.update(execution_count=None, outputs=[])
+    return c
+
+
+def build_notebook(gateway: str, secret: str, models: str = "frasberg-motion-free") -> dict:
+    """A ready-to-run notebook that turns a free Kaggle/Colab T4 into a Frasberg GPU worker."""
+    cells = [
+        _cell("markdown", f"""
+# Frasberg GPU Worker - free T4 (Kaggle / Colab)
+This notebook turns a free GPU into a **Frasberg Motion Free** render node for your Luchii app.
+
+**Kaggle:** Settings → Accelerator **GPU T4 x1**, Internet **On**, then *Run All*. That gives you 30 free GPU-hours a week.
+**Colab:** Runtime → Change runtime type → **T4 GPU**, then *Run all*.
+
+Leave the last cell running. While it runs, the **Frasberg Motion Free** engine shows **online** in the Video Creator.
+When the session ends (Kaggle sessions last up to 12h; Colab's free sessions are shorter), just run it again.
+Gateway: `{gateway}` · engines: `{models}`
+"""),
+        _cell("code", f"""
+import os
+os.environ["FRASBERG_GATEWAY_URL"] = "{gateway}"
+os.environ["FRASBERG_WORKER_SECRET"] = "{secret}"  # keep this notebook private
+os.environ["FRASBERG_WORKER_MODELS"] = "{models}"
+os.environ["FRASBERG_IDLE_UNLOAD_S"] = "1800"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+WORKDIR = "/kaggle/working/frasberg" if os.path.isdir("/kaggle") else "/content/frasberg"
+os.makedirs(WORKDIR, exist_ok=True)
+!nvidia-smi --query-gpu=name,memory.total --format=csv
+"""),
+        _cell("code", """
+!pip install -q -U "diffusers>=0.32" "transformers>=4.46,<5" "accelerate>=1.2" sentencepiece protobuf ftfy "imageio[ffmpeg]" imageio-ffmpeg hf_transfer requests
+"""),
+        _cell("code", """
+import requests
+H = {"X-Frasberg-Worker-Secret": os.environ["FRASBERG_WORKER_SECRET"]}
+for name in ["worker.py", "engines.py", "prefetch.py"]:
+    r = requests.get(f"{os.environ['FRASBERG_GATEWAY_URL']}/worker/files/{name}", headers=H, timeout=60)
+    r.raise_for_status()
+    open(f"{WORKDIR}/{name}", "w").write(r.text)
+    print("fetched", name, len(r.text), "bytes")
+"""),
+        _cell("code", """
+%cd {WORKDIR}
+!python prefetch.py {os.environ["FRASBERG_WORKER_MODELS"].replace(",", " ")}
+"""),
+        _cell("code", """
+# Runs forever: claims Frasberg jobs, renders on this GPU, uploads results. Stop it with the Stop button.
+%cd {WORKDIR}
+!python worker.py
+"""),
+    ]
+    return {"cells": cells, "metadata": {"accelerator": "GPU", "kernelspec": {"name": "python3", "display_name": "Python 3"},
+                                         "language_info": {"name": "python"}}, "nbformat": 4, "nbformat_minor": 5}
+
+
+async def recent_workers(minutes: int = 60) -> list:
+    since = _iso(_now() - timedelta(minutes=minutes))
+    rows = await db.gpu_workers.find({"last_seen": {"$gte": since}}, {"_id": 0}).sort("last_seen", -1).to_list(100)
+    cutoff = _iso(_now() - timedelta(seconds=WORKER_TTL))
+    for w in rows:
+        w["online"] = w["last_seen"] >= cutoff
+    return rows
+
+
+async def job_stats() -> dict:
+    out = {}
+    for st in ("queued", "running", "completed", "failed"):
+        out[st] = await db.gpu_jobs.count_documents({"status": st})
+    return out

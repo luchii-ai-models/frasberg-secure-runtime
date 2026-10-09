@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { Clapperboard, Download, Share2, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { shareVideo } from "./Studio";
+import { shareVideo, isPreviewEngine } from "./Studio";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
@@ -37,6 +37,7 @@ export default function VideoShare() {
           <p className="mt-3 text-neutral-400 text-sm" data-testid="video-share-meta">
             {video.mode === "image-to-video" ? "Photo-to-video" : "Text-to-video"} · {video.duration}s · {video.aspect_ratio}
             {video.author ? ` · by ${video.author}` : ""}
+            {isPreviewEngine(video.engine) ? " · Preview (animated stills)" : ""}
           </p>
         )}
 

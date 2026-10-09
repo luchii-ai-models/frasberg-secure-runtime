@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
-import { Activity, RefreshCw, Loader2 } from "lucide-react";
+import { Activity, RefreshCw, Loader2, Cpu, Download, Gift } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -33,6 +34,78 @@ const EngineCard = ({ e }) => {
     </div>
   );
 };
+
+function GpuPanel({ authHeader }) {
+  const [gpu, setGpu] = useState(null);
+  const [dl, setDl] = useState(false);
+  const load = useCallback(() => axios.get(`${API}/gpu-admin/overview`, { headers: authHeader }).then(({ data }) => setGpu(data)).catch(() => {}), [authHeader]);
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [load]);
+
+  const download = async () => {
+    setDl(true);
+    try {
+      const res = await axios.get(`${API}/gpu-admin/notebook`, { headers: authHeader, responseType: "blob",
+        params: { gateway: `${process.env.REACT_APP_BACKEND_URL}/api/gpu`, models: "frasberg-motion-free" } });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = "frasberg-free-gpu-worker.ipynb"; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Notebook downloaded. Upload it to Kaggle or Colab and run all cells.");
+    } catch { toast.error("Could not build the notebook"); } finally { setDl(false); }
+  };
+
+  const online = gpu?.workers.filter((w) => w.online) || [];
+  return (
+    <section className="mt-14" data-testid="gpu-panel">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <h2 className="font-display font-bold text-2xl flex items-center gap-2"><Cpu className="w-5 h-5 text-[#00F0FF]" /> Frasberg GPU</h2>
+          <p className="text-sm text-neutral-400 mt-1" data-testid="gpu-summary">
+            {gpu ? `${online.length} worker${online.length === 1 ? "" : "s"} online · ${gpu.jobs.queued} queued · ${gpu.jobs.running} rendering · ${gpu.jobs.completed} done · ${gpu.jobs.failed} failed` : "Loading…"}
+          </p>
+        </div>
+        <Button data-testid="gpu-notebook-btn" onClick={download} disabled={dl}
+          className="rounded-full bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold">
+          {dl ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} Free GPU worker notebook
+        </Button>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-[#00F0FF]/25 bg-[#00F0FF]/5 p-5 text-sm text-neutral-300" data-testid="gpu-free-howto">
+        <div className="flex items-center gap-2 font-semibold text-white"><Gift className="w-4 h-4 text-[#00F0FF]" /> Real AI video at zero cost</div>
+        <ol className="mt-2 list-decimal list-inside space-y-1 text-neutral-400">
+          <li>Download the notebook above. It already contains this gateway URL and your worker secret, so keep it private.</li>
+          <li>On <b className="text-neutral-200">kaggle.com</b>, go to New Notebook → File → Import Notebook, set Accelerator to <b className="text-neutral-200">GPU T4 x1</b> and Internet to On, then click Run All. Kaggle gives 30 free GPU hours a week. You can also use Colab's free T4.</li>
+          <li><b className="text-neutral-200">Frasberg Motion Free</b> turns online in the Video Creator within about a minute. The first run downloads around 10GB of weights.</li>
+        </ol>
+      </div>
+
+      <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="gpu-engines">
+        {gpu?.engines.map((e) => (
+          <div key={e.id} data-testid={`gpu-engine-${e.id}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-sm">{e.name}</span>
+              <span className={`text-xs ${e.status === "online" ? "text-emerald-300" : "text-neutral-500"}`}>{e.status === "online" ? `${e.workers_online} online${e.warm ? " · warm" : ""}` : "offline"}</span>
+            </div>
+            <p className="text-[11px] text-neutral-500 mt-1">{e.built_on} · needs {e.min_vram_gb}GB+ VRAM · {e.queue_depth} queued</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-xl border border-white/10 overflow-hidden" data-testid="gpu-workers">
+        {gpu && !gpu.workers.length && <p className="p-4 text-sm text-neutral-500" data-testid="gpu-no-workers">No GPU workers have connected in the last hour.</p>}
+        {gpu?.workers.map((w) => (
+          <div key={w.worker_id} data-testid={`gpu-worker-${w.worker_id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 border-b border-white/5 text-sm last:border-0">
+            <span className={`w-2 h-2 rounded-full ${w.online ? "bg-emerald-400" : "bg-neutral-600"}`} />
+            <span className="font-mono text-xs">{w.worker_id}</span>
+            <span className="text-neutral-400 text-xs">{w.gpu || "unknown GPU"}{w.vram_gb ? ` · ${w.vram_gb}GB` : ""}</span>
+            <span className="text-neutral-500 text-xs">{w.models.join(", ")}</span>
+            <span className="text-neutral-500 text-xs md:ml-auto">{w.busy ? "rendering" : w.loaded_model ? `warm: ${w.loaded_model}` : "idle"} · seen {new Date(w.last_seen).toLocaleTimeString()}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function EngineStatus() {
   const { user, authHeader } = useAuth();
@@ -95,6 +168,7 @@ export default function EngineStatus() {
         <div className="mt-10 grid sm:grid-cols-2 gap-4">
           {data?.engines.map((e) => <EngineCard key={e.id} e={e} />)}
         </div>
+        <GpuPanel authHeader={authHeader} />
       </main>
       <Footer />
     </div>

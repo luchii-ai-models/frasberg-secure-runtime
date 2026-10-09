@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search, Clapperboard, RotateCcw, ExternalLink } from "lucide-react";
-import { shareVideo } from "./Studio";
+import { shareVideo, isPreviewEngine } from "./Studio";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { useAuth } from "../context/AuthContext";
@@ -84,6 +84,9 @@ function VideoCard({ v }) {
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
+        {isPreviewEngine(v.engine) && (
+          <span data-testid={`gallery-video-preview-${v.id}`} className="absolute top-2 right-2 rounded-full bg-amber-400/90 px-2 py-0.5 text-[10px] font-semibold text-black">Preview</span>
+        )}
       </div>
       <div className="p-3 space-y-2 mt-auto">
         <p className="text-xs text-neutral-300 line-clamp-2" title={v.prompt}>{v.prompt}</p>
