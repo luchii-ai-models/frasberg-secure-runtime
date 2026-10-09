@@ -4,6 +4,7 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 
 import asyncio
+import hashlib
 import os
 import re
 import time
@@ -562,9 +563,17 @@ async def frasberg_video(prompt: str, duration: int) -> Optional[bytes]:
                     url = FRASBERG_BASE.rsplit("/api", 1)[0] + url
                 async with httpx.AsyncClient(timeout=120, follow_redirects=True) as hc:
                     vr = await hc.get(url, headers={"Authorization": f"Bearer {FRASBERG_KEYS[ki]}"})
-                if vr.status_code == 200 and len(vr.content) > 1000:
-                    return vr.content
-                return None
+                if vr.status_code != 200 or len(vr.content) <= 1000:
+                    return None
+                # Content fingerprint: identical bytes already served for a different prompt = canned clip.
+                digest = hashlib.sha256(vr.content).hexdigest()
+                seen = await db.frasberg_video_hashes.find_one({"sha256": digest}, {"_id": 0})
+                if seen and seen.get("prompt") != prompt:
+                    logger.warning("Frasberg video bytes repeat a previous render (%s); rejecting as canned", digest[:12])
+                    return None
+                await db.frasberg_video_hashes.update_one({"sha256": digest}, {"$setOnInsert": {
+                    "sha256": digest, "prompt": prompt, "url": url, "at": now_iso()}}, upsert=True)
+                return vr.content
     except HTTPException as e:
         logger.warning("Frasberg video unavailable (%s)", e.detail)
     except Exception:  # noqa: BLE001

@@ -1,0 +1,25 @@
+{
+  "summary": "Full-stack validation of the Frasberg Serverless GPU gateway + Luchii /video integration + /video and /models frontend. Backend: 21/21 pytest tests pass covering the engines catalogue, client-key auth (FK-001), worker-secret auth, the entire worker protocol via the hidden frasberg-dev-test engine (submit, heartbeat->online, claim w/ image_base64, progress/complete ownership (409), chunk-count mismatch (400), retryable requeue, non-retryable fail, file bytes integrity). Integration: with the helper worker running as frasberg-motion-pro, Luchii POST /api/video completes with engine='Frasberg Motion Pro', model=frasberg-motion-pro, mode=image-to-video, and /api/media/{id} returns a valid MP4. With no workers online, the job falls back; backend log confirms 'Frasberg video returned a stock sample ... rejecting' and the job completes on 'Frasberg Lite (CPU)' with mode=null even though an image_base64 was sent. Frontend /video: 3 engine cards + per-engine status badges (pro=online, fast/ultra=offline), ?engine=frasberg-motion-pro preselects Pro, fallback-note hidden when selected engine is online and shown when switching to an offline engine, aspect chips 16:9/9:16/1:1 present, start-image button opens hidden input, preview + remove work, length chips flip from pro's [3,5] to default [3,5,8] on offline-fast selection, Generate button present, no 'Astral Engine' text anywhere. Frontend /models: Motion Fast/Pro/Ultra cards present, 'Try this model' on Motion Pro navigates to /video?engine=frasberg-motion-pro, no 'Astral Engine' label.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_frasberg_gpu.py",
+    "/app/test_reports/pytest/frasberg_gpu.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "frasberg_gpu.py is clean, well-scoped (~380 lines) and the worker protocol has strong ownership checks (409 on wrong worker_id in progress/complete/fail, chunk-count mismatch 400).",
+    "gpu_render_video() polls every 5s for up to 60 min; consider using motor change-streams or an asyncio.Event when the gateway completes a GPU task to cut average latency and DB load.",
+    "The sample URL -> fallback detection in frasberg_video() relies on an SAMPLE_HOSTS allow-list; if frasberg.com starts serving samples from new hosts the detection silently fails. Consider also validating hash/duration of the returned clip."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_frasberg_gpu.py (new)"
+  ],
+  "success_rate": {"backend": "100% (21/21 pytest)", "frontend": "100% (all /video + /models checks)"},
+  "test_credentials": "Client key: frb_live_a1872bf269d4b2759accd43510308eaadb930c31 (from FRASBERG_API_KEYS). Worker secret: FRASBERG_WORKER_SECRET from backend/.env.",
+  "seed_data_creation": "Transient gpu_jobs + gpu_workers created and cleaned up (db.gpu_workers.deleteMany({})). Helper worker processes stopped.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Pytest file /app/backend/tests/test_frasberg_gpu.py is the regression suite for the GPU gateway and uses the hidden frasberg-dev-test engine (no real GPU needed). It auto-cleans the test worker but assumes starting state is clean; if a prior run leaked queued jobs on frasberg-dev-test, run: mongosh luchii-tools --eval 'db.gpu_jobs.deleteMany({model:\"frasberg-dev-test\"}); db.gpu_workers.deleteMany({})'. For GPU-path integration tests, start the helper: nohup /tmp/start_helper.sh (or inline the env + /app/tests/gpu_protocol_worker.py command). Luchii fallback render takes ~90-110s on this 2-CPU pod; music gen (/api/music) takes ~1-2 min for 10s audio.",
+  "rca of the issue": "N/A - no issues found."
+}

@@ -213,3 +213,6 @@ agent_communication:
         test@luchii.ai / Test1234!. Please run a full backend pass (high priority first). Special focus:
         confirm /api/video produces a REAL local MP4 via /api/media (not a Frasberg sample URL), and /api/music
         returns a real WAV. Do NOT change any .env or key values.
+    -agent: "main"
+    -message: "NEW (iteration 9): Frasberg Serverless GPU Gateway (backend/frasberg_gpu.py, mounted /api/gpu) + standalone worker (/app/frasberg_gpu_worker). Luchii /api/video now accepts model, aspect_ratio, image_base64 (image-to-video) and routes GPU worker -> frasberg.com (stock samples rejected) -> Frasberg Lite (local CPU). /video UI: engine picker (Motion Fast/Pro/Ultra with live online/offline), Format chips, start-image upload, engine label on results. No real GPU in this pod -> all product engines show offline; protocol tested with hidden frasberg-dev-test engine."
+

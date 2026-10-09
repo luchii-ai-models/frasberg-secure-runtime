@@ -65,3 +65,16 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - Key audit (live, 2026-10-09): /generate/image = 502 on every key; /voice/speak = 403/503; /generate/video "completes" with rotating stock clips (filesamples, test-videos.co.uk Big Buck Bunny, MDN flower.mp4), `model` field ignored; /generate/music returns a synthesized fixed chord drone ("mood":"major"), not prompt-specific music. Frasberg's own site bundle references no real video model.
 - /video is now Frasberg-first: `frasberg_video()` submits to the Video Engine key, polls, accepts only non-sample renders, otherwise falls back to the local engine. Job status exposes `engine` (frasberg | luchii-local).
 - Frasberg server is NOT in this repo — it must be fixed on the Frasberg side (real GPU models) for real renders.
+
+## Update (2026-10, Frasberg Serverless GPU)
+- `backend/frasberg_gpu.py` is the Frasberg Serverless GPU Gateway, mounted at `/api/gpu` and tested 21/21 in iteration_9.
+  - Client API in the frasberg.com style: `/v1/engines`, `/generate/video`, `/generate/image`, `/jobs/{id}`, `/files/{id}`. Auth is the exact frb_live keys from FRASBERG_API_KEYS; a bad key returns FK-001.
+  - Worker pull API at `/worker/*`, using the FRASBERG_WORKER_SECRET header. Includes heartbeat, an atomic claim that prefers the warm model, chunked upload, a 180s lease with re-queue (3 attempts max), and re-queue on OOM.
+  - Mongo collections: gpu_jobs, gpu_workers, gpu_chunks. GridFS bucket: gpu_outputs.
+- `/app/frasberg_gpu_worker/` is a standalone worker (Dockerfile, requirements-gpu.txt, prefetch.py, NOTICE.md). Its engines are frasberg-motion-fast (LTX-Video 0.9.7 distilled, two-stage), frasberg-motion-pro (Wan 2.2 TI2V-5B), frasberg-motion-ultra (HunyuanVideo T2V and I2V) and frasberg-image (FLUX.1-schnell). The hidden frasberg-dev-test engine is only for protocol testing. Unloads after an idle timeout (scale-to-zero).
+  - NEVER pip install requirements-gpu.txt into the backend venv. It upgrades diffusers and transformers and breaks the local engines (backend pins diffusers 0.31.0 and transformers 4.46.3).
+- Luchii `/api/video` accepts model, aspect_ratio and image_base64. Routing order: an online GPU worker for the chosen engine, then any online motion engine, then frasberg.com, then Frasberg Lite (local CPU).
+  - frasberg.com clips are rejected if the URL is a known sample or the bytes repeat a render made for a different prompt (db.frasberg_video_hashes).
+- `/api/generate` (text-to-image) tries the Frasberg Image GPU first when a worker is online.
+- `/video` UI has an engine picker with live status, format chips, a start-image upload (image-to-video), and the engine label and progress percentage. The Models page lists Motion Fast, Pro and Ultra.
+- BLOCKER for real renders: at least one NVIDIA GPU machine (24GB+, or 80GB for Ultra) must run the worker. This pod has no GPU.
