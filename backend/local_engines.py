@@ -117,18 +117,25 @@ def _pipes():
 
 
 def warm_up():
+    """Lightweight boot: only pre-cache the small Piper voice. Heavy models
+    (SD-Turbo, Shap-E, MusicGen, OpenVoice) download/load lazily on first use so
+    boot never spikes RAM+disk at once (that caused OOM restart loops)."""
     try:
         _voice("nova")
-        _openvoice()
-        with _image_lock:
-            _pipes()
-        logger.info("Luchii in-house engines loaded")
+        logger.info("Luchii voice engine ready; heavy engines load on first use")
+    except Exception:  # noqa: BLE001
+        logger.exception("Luchii in-house engine warm-up failed")
+
+
+def prefetch_scratch_models():
+    """One-time background download of 3D/music weights to persistent disk."""
+    try:
         from huggingface_hub import snapshot_download
         for repo in (SHAPE_MODEL, SHAPE_IMG_MODEL, MUSIC_MODEL):
             snapshot_download(repo, cache_dir=str(SCRATCH_MODELS_DIR / "hf"))
-        logger.info("Scratch models (3D, music) cached")
+        logger.info("Scratch models (3D, music) cached on persistent disk")
     except Exception:  # noqa: BLE001
-        logger.exception("Luchii in-house engine warm-up failed")
+        logger.exception("Scratch model prefetch failed")
 
 
 def _to_data_url(img) -> str:

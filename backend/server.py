@@ -932,7 +932,8 @@ async def startup():
                               {"$set": {"status": "failed", "error": "Interrupted by a server restart. Please try again."}})
     await db.models3d.update_many({"status": {"$in": ["queued", "running"]}},
                                   {"$set": {"status": "failed", "error": "Interrupted by a server restart. Please try again."}})
-    asyncio.get_running_loop().run_in_executor(None, local_engines.warm_up)
+    loop = asyncio.get_running_loop()
+    loop.run_in_executor(None, local_engines.warm_up)
 
 
 @app.on_event("shutdown")
