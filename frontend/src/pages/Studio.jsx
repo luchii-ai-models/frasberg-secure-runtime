@@ -59,7 +59,7 @@ export async function shareVideo(id) {
   if (navigator.share) {
     try { await navigator.share({ title: "Made with Frasberg Motion", url }); return; } catch (e) { if (e?.name === "AbortError") return; }
   }
-  try { await navigator.clipboard.writeText(url); toast.success("Share link copied!"); } catch { toast.message(url); }
+  try { await navigator.clipboard.writeText(url); toast.success("Share link copied!"); } catch { toast.message("Copy this link to share", { description: url, duration: 10000 }); }
 }
 
 const ENGINE_ICONS = { fast: Zap, quality: Sparkles, ultra: Crown };

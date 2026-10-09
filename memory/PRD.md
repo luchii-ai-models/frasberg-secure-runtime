@@ -78,3 +78,11 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - `/api/generate` (text-to-image) tries the Frasberg Image GPU first when a worker is online.
 - `/video` UI has an engine picker with live status, format chips, a start-image upload (image-to-video), and the engine label and progress percentage. The Models page lists Motion Fast, Pro and Ultra.
 - BLOCKER for real renders: at least one NVIDIA GPU machine (24GB+, or 80GB for Ultra) must run the worker. This pod has no GPU.
+
+## Update (2026-10, video presets + gallery)
+- The /video page has "Trending" TikTok-style presets: Surprise me (a random idea from SURPRISE_VIDEO_IDEAS), POV, Glow-up transition, Satisfying loop, Pet reaction, Street dance, Food ASMR and Outfit check. Picking one sets the format to 9:16.
+- Once a start image is attached, a "Photo motion" row replaces those presets: Zoom in, Orbit 360, Hair in wind, Come alive, Dolly out, 3D parallax, Slow-mo, Rain & neon. Data is in presets.js.
+- New `GET /api/videos` (signed-in user's finished clips) and public `GET /api/videos/{id}`. Legacy engine labels are mapped to Frasberg names.
+- The gallery has a Videos tab: each clip card has a player, a badge, replay, share, download and open.
+- Public share page at `/v/:id`. Shared clips use the native share sheet when available, otherwise the link is copied. Studio results also get a Share button.
+- Tests: iteration_10 passed 100% (backend tests in backend/tests/test_videos_api.py).
