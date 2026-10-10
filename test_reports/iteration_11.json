@@ -1,0 +1,28 @@
+{
+  "summary": "Full-stack validation of the new 'Frasberg Motion Free' engine, admin GPU panel, downloadable notebook, worker-files endpoint, queue expiry, Preview-mode UI and preview labels. Backend: 37/37 pytest pass covering GET /api/gpu/v1/engines (5 visible engines, motion-free first, tier=free, durations=[3,4], min_vram_gb=14), /api/gpu/worker/files/{name} (401 without secret, 200 text/plain for worker.py/engines.py/prefetch.py/requirements-gpu.txt, 404 for unknown names + ..%2F.env traversal), /api/gpu-admin/overview (401 anon, 403 motion.tester, 200 admin with {workers, jobs:{queued,running,completed,failed}, engines}), /api/gpu-admin/notebook (401/403 enforced, non-https gateway 422, non /api/gpu suffix 422, admin download returns nbformat-4 ipynb with 6 cells; cell 2 contains the gateway URL + FRASBERG_WORKER_SECRET + FRASBERG_WORKER_MODELS=frasberg-motion-free), queue-expiry (a queued gpu_jobs doc with created_at > 30 min ago is marked failed with error 'No Frasberg GPU worker picked this job up in time' after a /api/gpu/v1/engines call). Protocol regression: live helper (/app/tests/gpu_protocol_worker.py frasberg-motion-free) heartbeated, claimed, uploaded a chunk and completed; the parallel POST /api/video {model: frasberg-motion-free, duration:4, aspect_ratio:9:16} finished with engine='Frasberg Motion Free'. Frontend /status as admin: gpu-panel + gpu-summary + gpu-free-howto + gpu-engines (all 5 cards incl. gpu-engine-frasberg-motion-free) + gpu-workers + gpu-no-workers rendered; gpu-notebook-btn triggered a download of frasberg-free-gpu-worker.ipynb. /video (no workers): the 4-card engine grid shows Motion Free/Fast/Pro/Ultra all OFFLINE; video-preview-mode-banner is visible and mentions 'animated stills'; without a start image the banner does NOT include 'your start photo isn't used'; video-engine-fallback-note is correctly absent when all engines are offline. Gallery Videos tab (motion.tester): the Lite card cfde8c3d... has gallery-video-preview-cfde8c3d... ('Preview'); the Motion Pro card eff23281... has none. Share /v/cfde8c3d... meta ends with 'Preview (animated stills)'; /v/eff23281... meta does not. /models shows the 'Frasberg Motion Free' card with route /video?engine=frasberg-motion-free (confirmed in /app/frontend/src/mock.js). /audio and /create still load. Mongo gpu_workers cleaned up after helper worker run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_frasberg_gpu.py",
+    "/app/backend/tests/test_frasberg_free_gpu.py",
+    "/app/test_reports/pytest/gpu_free.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "frasberg_gpu._requeue_stale uses an ISO-string timestamp comparison ($lt) against the created_at string; works today because created_at is always stored with the same tz-aware isoformat, but any future code path inserting with a different formatting (e.g. missing +00:00 offset) would silently skip the TTL. Consider using a BSON Date field for created_at or wrapping with a helper to guarantee the same format at write time.",
+    "/api/gpu-admin/notebook validates the gateway with re.match(r'^https://[^\\s\"\\'] +/api/gpu$'), but it accepts any https host (no allowlist). An admin could paste a hostile https URL and bake the FRASBERG_WORKER_SECRET into a notebook sent elsewhere. Low risk because only admins can call it, but consider pinning to REACT_APP_BACKEND_URL or an env-configured allowlist.",
+    "EngineStatus GpuPanel polls /api/gpu-admin/overview every 15s even when the tab is hidden; a visibility-change gate (document.visibilityState==='visible') would save bandwidth.",
+    "Studio.jsx: when all engines are offline, the preview banner shows but the first engine card (Motion Free) is not auto-highlighted as the suggested target - the default stays on Motion Fast which is harder for free users. Consider auto-selecting Motion Free as the default when ?engine is not supplied and no engine is online (currently auto-select only triggers when at least one is online)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_frasberg_gpu.py (TestEngines expectation updated to 5 engines, motion-free first with free/[3,4]/14GB fields)",
+    "/app/backend/tests/test_frasberg_free_gpu.py (new - worker-files, admin overview/notebook, queue expiry)"
+  ],
+  "success_rate": {"backend": "100% (37/37)", "frontend": "100% (status admin panel, preview banner, gallery/share preview labels, models card)"},
+  "test_credentials": "admin.tester@luchiiapp.com / Admin123! · motion.tester@luchiiapp.com / Motion123! · FRASBERG_WORKER_SECRET from /app/backend/.env",
+  "seed_data_creation": "Transient only: a TEST_ queued gpu_jobs doc inserted directly in Mongo (deleted in finally), and an e2e-fast gpu_workers heartbeat row (deleted via mongosh db.gpu_workers.deleteMany({})).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression tests for the new Motion Free engine live in /app/backend/tests/test_frasberg_free_gpu.py (worker files, admin overview+notebook, queue TTL) and the existing /app/backend/tests/test_frasberg_gpu.py (now asserts 5 visible engines with motion-free first). For protocol end-to-end runs, use /app/tests/gpu_protocol_worker.py (never pip install requirements-gpu.txt into /root/.venv). After any helper worker run: mongosh luchii-tools --eval 'db.gpu_workers.deleteMany({})'.",
+  "rca of the issue": "N/A - all tested features behave as specified."
+}
