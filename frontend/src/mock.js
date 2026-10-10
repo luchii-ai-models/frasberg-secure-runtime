@@ -77,19 +77,19 @@ export const aiModels = [
 ];
 
 export const tools = [
-  { title: "AI Image Generator", desc: "Create top-quality images with the best AI models", featured: true, mode: "text" },
+  { title: "AI Image Generator", desc: "Create top-quality images with the best AI models", featured: true, route: "/create" },
   { title: "Video Creator", desc: "Create videos from text, image, or both", route: "/video" },
-  { title: "Image Upscaler", desc: "Upscale images up to 10K with real detail", mode: "image", preset: "Enhance and upscale this image to crisp 4K detail, preserving the original composition and colors" },
-  { title: "Image Editor", desc: "Retouch, adjust, and refine photos in seconds", mode: "image" },
-  { title: "Background Remover", desc: "Remove any background in one click", mode: "image", preset: "Remove the background completely and place the subject on a clean solid studio backdrop" },
+  { title: "Image Upscaler", desc: "Upscale any photo to true 4K with real AI detail", route: "/create?tool=upscale" },
+  { title: "Image Editor", desc: "Remix any photo with a plain-language edit", route: "/create?tool=edit" },
+  { title: "Background Remover", desc: "Remove any background in one click", route: "/create?tool=remove-bg" },
   { title: "Text to Speech", desc: "Turn your text into natural speech, in any voice", route: "/tts" },
   { title: "Speech to Speech", desc: "Convert one voice into another, instantly", route: "/sts" },
   { title: "Voice Cloning", desc: "Clone your voice and speak any text with it", route: "/voice-clone" },
   { title: "Audio Studio", desc: "Generate music, sound effects, and audio beds", route: "/audio" },
   { title: "3D Studio", desc: "Generate 3D objects and assets from a prompt", route: "/3d" },
   { title: "Spaces Builder", desc: "Build interactive 3D worlds and scenes", route: "/spaces" },
-  { title: "Change Camera Angle", desc: "Reframe any shot from a new angle", mode: "image", preset: "Reframe this shot from a new camera angle while keeping the same subject and scene" },
-  { title: "All tools", desc: "Explore the full Frasberg Creator toolset", mode: "text" },
+  { title: "Change the Scene", desc: "Turn day into night, add snow, change the season", route: "/create?tool=edit&prompt=turn%20day%20into%20night" },
+  { title: "All models", desc: "Explore every Luchii and Frasberg model", route: "/models" },
 ];
 
 export const useCases = [
@@ -126,14 +126,14 @@ export const footerCols = [
 ];
 
 export const showcase = [
-  { title: "Chrome Dream", style: "3D Render", img: "/showcase/chrome-dream.jpg", prompt: "Liquid chrome sculpture, studio lighting, octane render, ultra detailed" },
-  { title: "Stardust", style: "Cosmic", img: "/showcase/stardust.jpg", prompt: "Vast cosmic nebula in cyan and violet, deep-space photography" },
-  { title: "Neon Muse", style: "Fashion", img: "/showcase/neon-muse.jpg", prompt: "Neon-lit fashion editorial portrait, magenta and cyan rim light" },
-  { title: "Golden Hour", style: "Photoreal", img: "/showcase/golden-hour.jpg", prompt: "Cinematic portrait of a young woman at golden hour, warm amber sunset light glowing on her face and hair, orange dusk sky behind her, shallow depth of field" },
-  { title: "Hyperform", style: "3D Render", img: "/showcase/hyperform.jpg", prompt: "Abstract futuristic form, glossy materials, physically based render" },
-  { title: "Nebula Drift", style: "Cosmic", img: "/showcase/nebula-drift.jpg", prompt: "Swirling nebula clouds with glowing stars, ultra high detail" },
-  { title: "Lost Valley", style: "Surreal", img: "/showcase/lost-valley.jpg", prompt: "Dreamlike fantasy valley at golden hour, epic scale, painterly" },
-  { title: "Deep Current", style: "Abstract", img: "/showcase/deep-current.jpg", prompt: "Organic flowing 3D shapes in deep blue and violet, octane render" },
+  { title: "Chrome Dream", style: "3D Render", styleId: "3d", img: "/showcase/chrome-dream.jpg", prompt: "A twisted teal glass and chrome ribbon sculpture shaped like a sphere, glowing cyan reflections on a glossy teal floor, studio lighting, octane render, ultra detailed" },
+  { title: "Stardust", style: "Cosmic", styleId: "cinematic", img: "/showcase/stardust.jpg", prompt: "Deep-space photograph of a bright star cluster above towering orange nebula pillars, glowing cosmic dust, Hubble style, ultra detailed" },
+  { title: "Neon Muse", style: "Fashion", styleId: "cinematic", img: "/showcase/neon-muse.jpg", prompt: "Neon fashion editorial portrait of a platinum-haired model in dark sunglasses and a black jacket, hot magenta rim light, blue neon city lights behind, cinematic" },
+  { title: "Golden Hour", style: "Photoreal", styleId: "photorealistic", img: "/showcase/golden-hour.jpg", prompt: "Moody close-up portrait of a woman with long platinum blonde hair, soft warm side light on her face, dark background, natural skin texture, 85mm lens" },
+  { title: "Hyperform", style: "3D Render", styleId: "3d", img: "/showcase/hyperform.jpg", prompt: "Futuristic hyperspace tunnel of glowing orange and cyan neon light panels rushing toward a bright cyan core, motion blur, 3D render" },
+  { title: "Nebula Drift", style: "Cosmic", styleId: "digital-art", img: "/showcase/nebula-drift.jpg", prompt: "A swirling purple and blue ring nebula with a glowing pink core, scattered bright stars, deep space, vivid colors, ultra detailed" },
+  { title: "Lost Valley", style: "Surreal", styleId: "digital-art", img: "/showcase/lost-valley.jpg", prompt: "Surreal red desert valley with lonely jagged peaks under a glowing pink aurora sky, dreamy haze, minimal fantasy landscape" },
+  { title: "Deep Current", style: "Abstract", styleId: "3d", img: "/showcase/deep-current.jpg", prompt: "Smooth flowing abstract 3D waves in deep blue and violet, soft glowing gradients, glossy surfaces, octane render" },
 ];
 
 export const modelFamilies = [

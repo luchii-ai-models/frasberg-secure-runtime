@@ -11,12 +11,10 @@ export default function LogoLoader({ label = "Creating with Frasberg Creator..."
         {/* rotating accent ring */}
         <span className="absolute inset-1 rounded-full border-2 border-transparent border-t-[#00F0FF] border-r-[#00F0FF]/50 ring-spin" />
         {/* logo */}
-        <img src={brand.logo} alt="Frasberg Creator" className="w-20 h-20 rounded-full object-contain logo-float" />
+        <img src={brand.luchiiLogo} alt="Luchii" className="w-20 h-20 rounded-full object-contain logo-float" />
       </div>
-      <div className="text-center">
-        <p className="text-sm font-medium text-neutral-200">{label}</p>
-        {sublabel && <p className="text-xs text-neutral-500 mt-1">{sublabel}</p>}
-      </div>
+      {/* Clean mark-only loader: the status text is kept for screen readers, not shown under the logo */}
+      <span className="sr-only" role="status">{label}{sublabel ? `. ${sublabel}` : ""}</span>
     </div>
   );
 }

@@ -48,19 +48,41 @@ def key_order(feature: Optional[str]) -> list:
     first = [i for p in prefs for i, k in enumerate(FRASBERG_KEYS) if k.startswith(f"frb_live_{p}")]
     return first + [i for i in range(len(FRASBERG_KEYS)) if i not in first]
 
+# Short hints: SD/CLIP reads only ~77 tokens, so long hints used to be cut off and the style was lost.
 STYLE_HINTS = {
-    "cinematic": "cinematic film still, anamorphic lens, dramatic lighting, rich color grade, volumetric light, shallow depth of field, 8k, masterpiece",
-    "photorealistic": "photorealistic, ultra detailed, natural soft light, 85mm lens, sharp focus, high dynamic range, award-winning photography",
-    "3d": "3D render, octane render, glossy physically based materials, studio lighting, ultra detailed",
-    "anime": "anime key visual, vibrant cel shading, clean line art, luminous colors, detailed background, studio quality",
-    "digital-art": "digital art, highly detailed concept illustration, vivid colors, glowing highlights, trending on artstation",
-    "product": "luxury product photography, seamless studio backdrop, softbox lighting, crisp reflections, commercial advertising shot",
+    "cinematic": "cinematic film still, dramatic lighting, rich color grade, shallow depth of field",
+    "photorealistic": "photorealistic photo, natural light, 85mm lens, sharp focus, fine detail",
+    "3d": "3D render, octane render, glossy materials, studio lighting",
+    "anime": "anime key visual, cel shading, clean line art, vibrant colors",
+    "digital-art": "digital art illustration, vivid colors, glowing highlights, artstation",
+    "product": "product photography, studio backdrop, softbox lighting, crisp reflections",
 }
 LUCHII_IMAGE_MODELS = {
-    "Luchii Nova-Muse": "RAW photo, ultra realistic, natural skin texture, sharp focus, 85mm lens, soft film grain",
-    "Luchii Dreamline": "expressive painterly brushwork, bold vivid color, dreamy artistic atmosphere",
-    "Luchii Vision": "striking concept art, stylized world-building, dramatic cinematic composition",
+    "Luchii Nova-Muse": "RAW photo, ultra realistic, sharp focus",
+    "Luchii Dreamline": "painterly, vivid color",
+    "Luchii Vision": "concept art, dramatic composition",
 }
+# Built-in model routing: the style (and the words in the prompt) choose the Luchii model, no picker needed.
+STYLE_MODEL = {"photorealistic": "Luchii Nova-Muse", "cinematic": "Luchii Nova-Muse", "product": "Luchii Nova-Muse",
+               "anime": "Luchii Dreamline", "digital-art": "Luchii Dreamline", "3d": "Luchii Vision"}
+ART_WORDS = re.compile(r"\b(anime|manga|cartoon|illustration|painting|painterly|watercolou?r|sketch|pixel art|vector|logo|icon|comic)\b", re.I)
+RENDER_WORDS = re.compile(r"\b(3d|render|octane|concept art|isometric|low poly|sculpture|claymation)\b", re.I)
+# Painter-X: the chosen style becomes part of the edit instruction, so style chips work for remixes too.
+EDIT_STYLE = {
+    "cinematic": "make it look like a cinematic film still", "photorealistic": "make it photorealistic",
+    "3d": "turn it into a 3D render", "anime": "turn it into an anime illustration",
+    "digital-art": "turn it into vivid digital art", "product": "make it a clean studio product photo",
+}
+
+
+def auto_model(prompt: str, style: Optional[str]) -> str:
+    if ART_WORDS.search(prompt):
+        return "Luchii Dreamline"
+    if RENDER_WORDS.search(prompt) and style != "photorealistic":
+        return "Luchii Vision"
+    return STYLE_MODEL.get(style or "", "Luchii Nova-Muse")
+
+
 PHOTO_MODELS = {"Luchii Nova-Muse"}  # rendered by the photoreal engine (local_engines.generate_photo)
 PERSON_WORDS = re.compile(r"\b(portrait|woman|women|man|men|girl|boy|person|people|model|face|selfie|lady|guy)s?\b", re.I)
 UPSCALE_PRESET = "Enhance and upscale this image to crisp 4K detail, preserving the original composition and colors"
@@ -272,6 +294,12 @@ class EditIn(BaseModel):
     prompt: str = Field(min_length=1)
     image_base64: str
     session_id: Optional[str] = None
+    style: Optional[str] = None
+
+
+class CutoutIn(BaseModel):
+    image_base64: str
+    session_id: Optional[str] = None
 
 
 class UpscaleIn(BaseModel):
@@ -329,17 +357,19 @@ async def me(user: dict = Depends(current_user)):
 
 @api.post("/generate")
 async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_user)):
-    model = body.model if body.model in LUCHII_IMAGE_MODELS else None
+    model = body.model if body.model in LUCHII_IMAGE_MODELS else auto_model(body.prompt, body.style)
     draft = body.quality == "draft" and model in PHOTO_MODELS
     seed = body.seed if body.seed is not None else random.randint(0, 2**31 - 1)
-    hint = ", ".join(h for h in (LUCHII_IMAGE_MODELS.get(model or ""), STYLE_HINTS.get(body.style or "", "")) if h)
+    # The photo hint ("RAW photo") fights 3D/illustration styles, so the style hint wins there.
+    model_hint = "" if model in PHOTO_MODELS and body.style in ("3d", "digital-art", "anime") else LUCHII_IMAGE_MODELS.get(model or "")
+    hint = ", ".join(h for h in (model_hint, STYLE_HINTS.get(body.style or "", "")) if h)
     full = f"{body.prompt}. {hint}. Aspect ratio {body.aspect_ratio}." if hint else body.prompt
     img, engine = await gpu_image(full, body.aspect_ratio), "frasberg-image"
     if not img:
         local_prompt = f"{body.prompt}, {hint}" if hint else body.prompt
         if model in PHOTO_MODELS:
             if PERSON_WORDS.search(body.prompt):  # cfg 1.0 ignores negative prompts, so steer people toward clothing
-                local_prompt = f"{body.prompt}, wearing a stylish outfit, {hint}"
+                local_prompt = f"{body.prompt}, fully clothed, wearing a stylish outfit, {hint}"
             local_fn, args = local_engines.generate_photo, (local_prompt, body.aspect_ratio, draft, seed)
         else:
             local_fn, args = local_engines.generate_image, (local_prompt, body.aspect_ratio)
@@ -353,10 +383,29 @@ async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_use
 
 @api.post("/edit")
 async def edit(body: EditIn, user: Optional[dict] = Depends(optional_user)):
-    img, engine = await image_with_fallback({"prompt": body.prompt, "image_base64": strip_data_url(body.image_base64)},
-                                            local_engines.instruct_edit, body.prompt, body.image_base64)
-    doc = await save_generation("edit", body.prompt, img, body.session_id, user, "Remix")
-    return {"id": doc["id"], "kind": "edit", "model": "Luchii Painter-X", "image_base64": img, "prompt": body.prompt, "engine": engine}
+    instruction = body.prompt.strip().rstrip(".")
+    if EDIT_STYLE.get(body.style or ""):
+        instruction = f"{instruction}, {EDIT_STYLE[body.style]}"
+    img, engine = await image_with_fallback({"prompt": instruction, "image_base64": strip_data_url(body.image_base64)},
+                                            local_engines.instruct_edit, instruction, body.image_base64)
+    doc = await save_generation("edit", body.prompt, img, body.session_id, user, "Remix", model="Luchii Painter-X")
+    return {"id": doc["id"], "kind": "edit", "model": "Luchii Painter-X", "image_base64": img, "prompt": body.prompt,
+            "engine": engine, "style": body.style}
+
+
+@api.post("/remove-bg")
+async def remove_bg(body: CutoutIn, user: Optional[dict] = Depends(optional_user)):
+    if local_engines.image_busy():
+        raise HTTPException(status_code=429, detail="Frasberg Creator is finishing another image. Yours is in the queue.",
+                            headers={"Retry-After": "8"})
+    try:
+        img = await asyncio.to_thread(local_engines.remove_background, body.image_base64)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Background removal failed")
+        raise HTTPException(status_code=424, detail=f"Luchii cutout engine error: {e.__class__.__name__}")
+    doc = await save_generation("cutout", "Background removed", img, body.session_id, user, "Cutout", model="Luchii Prime")
+    return {"id": doc["id"], "kind": "cutout", "model": "Luchii Prime", "image_base64": img, "prompt": "Background removed",
+            "engine": "luchii-local"}
 
 
 @api.post("/upscale")
@@ -409,6 +458,11 @@ async def generate_job(body: GenerateIn, user: Optional[dict] = Depends(optional
 @api.post("/edit/jobs")
 async def edit_job(body: EditIn, user: Optional[dict] = Depends(optional_user)):
     return await _start_image_job("edit", edit, body, user)
+
+
+@api.post("/remove-bg/jobs")
+async def remove_bg_job(body: CutoutIn, user: Optional[dict] = Depends(optional_user)):
+    return await _start_image_job("cutout", remove_bg, body, user)
 
 
 @api.post("/upscale/jobs")

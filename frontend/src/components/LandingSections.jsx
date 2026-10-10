@@ -64,6 +64,7 @@ export default function LandingSections() {
               style: g.style || "AI Art",
               img: g.image_base64,
               prompt: g.prompt,
+              styleId: g.style,
             }))
           );
         }
@@ -101,7 +102,14 @@ export default function LandingSections() {
           {items.map((s, i) => (
             <button
               key={i}
-              onClick={() => navigate("/create")}
+              data-testid={`showcase-card-${i}`}
+              title="Open in the creator to remix it or make your own"
+              onClick={() => {
+                const q = new URLSearchParams({ tool: "edit", prompt: s.prompt || "" });
+                if (s.img && s.img.startsWith("/")) q.set("ref", s.img);
+                if (s.styleId) q.set("style", s.styleId);
+                navigate(`/create?${q.toString()}`);
+              }}
               className="group relative block w-full mb-5 break-inside-avoid rounded-2xl overflow-hidden ring-1 ring-white/10 hover:ring-[#00F0FF]/60 shadow-xl shadow-black/40 hover:-translate-y-1 transition duration-300 text-left"
             >
               <img

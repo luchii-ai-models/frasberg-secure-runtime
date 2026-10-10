@@ -156,3 +156,13 @@ websockets==16.1.1
 yarl==1.25.1
 zipp==4.1.1
 peft==0.13.2
+rembg==2.0.85
+PyMatting==1.1.16
+scikit-image==0.26.0
+ImageIO==2.38.1
+tifffile==2026.3.3
+rembg==2.0.85
+PyMatting==1.1.16
+scikit-image==0.26.0
+ImageIO==2.38.1
+tifffile==2026.3.3

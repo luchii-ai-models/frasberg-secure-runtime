@@ -212,7 +212,7 @@ def _to_jpeg_url(img, quality: int = 93) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-HD_SCALE = 2  # every 512px render is super-resolved (Luchii Prime compact, ~7s) to a crisp 2x HD image
+HD_SCALE = 4  # every 512px render is super-resolved (Luchii Prime compact, ~7s) to a crisp ~2K image
 SR_BLEND = 0.8  # keep 20% of the Lanczos image so skin and fabric keep natural texture
 
 
@@ -262,7 +262,7 @@ def generate_image(prompt: str, aspect: Optional[str] = "1:1") -> str:
     with _heavy_lock, _image_lock:
         _claim("image")
         t2i, _ = _pipes()
-        img = t2i(prompt=prompt, num_inference_steps=1, guidance_scale=0.0, width=w, height=h).images[0]
+        img = t2i(prompt=prompt, num_inference_steps=2, guidance_scale=0.0, width=w, height=h).images[0]
         return _hd(img)
 
 
@@ -374,6 +374,24 @@ def generate_photo(prompt: str, aspect: Optional[str] = "1:1", draft: bool = Fal
         img = pipe(prompt=prompt, negative_prompt=PHOTO_NEGATIVE, num_inference_steps=PHOTO_DRAFT_STEPS if draft else PHOTO_STEPS,
                    guidance_scale=1.0, width=w, height=h, generator=gen).images[0]
         return _hd(img)
+
+
+_cutout = None
+
+
+def remove_background(image_b64: str) -> str:
+    """Luchii cutout: IS-Net (rembg) background removal -> transparent PNG at the original size (max 2048px)."""
+    global _cutout
+    from PIL import Image
+    from rembg import new_session, remove
+    raw = base64.b64decode(image_b64.split(",", 1)[1] if image_b64.startswith("data:") else image_b64)
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    img.thumbnail((2048, 2048), Image.LANCZOS)
+    with _image_lock:
+        if _cutout is None:
+            _cutout = new_session("isnet-general-use")
+        out = remove(img, session=_cutout, post_process_mask=True)
+    return _to_data_url(out)
 
 
 def image_busy() -> bool:

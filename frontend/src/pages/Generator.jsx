@@ -1,23 +1,32 @@
-import React, { useState, useEffect, useRef } from "react";
-import { LuchiiBadge, luchiiModelFor, LUCHII_PICKER } from "../components/LuchiiBadge";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
 import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
-  Sparkles, Wand2, Download, Loader2, ImageIcon, ArrowLeft, Dice5,
-  Upload, X, Maximize2, LayoutGrid, Type, Images, Share2, SplitSquareHorizontal, CheckCircle2,
+  Wand2, Download, Loader2, ImageIcon, ArrowLeft, Dice5, X, Maximize2, LayoutGrid, Share2,
+  SplitSquareHorizontal, CheckCircle2, Shuffle, Scissors, Type, Upload, Paperclip, ArrowUp,
 } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
-import { genStyles, genAspects, promptSuggestions, brand } from "../mock";
-import { PresetRow } from "../components/PresetRow";
-import { IMAGE_PRESETS } from "../presets";
+import { brand } from "../mock";
 import { useAuth } from "../context/AuthContext";
 import LogoLoader from "../components/LogoLoader";
 import RenderProgress from "../components/RenderProgress";
+import { TEXT_PRESETS, REMIX_PRESETS, surprisePrompt, rotatePresets } from "../lib/promptKit";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const STYLES = [
+  { id: "auto", label: "Auto style" },
+  { id: "photorealistic", label: "Photoreal" },
+  { id: "cinematic", label: "Cinematic" },
+  { id: "3d", label: "3D Render" },
+  { id: "anime", label: "Anime" },
+  { id: "digital-art", label: "Digital Art" },
+  { id: "product", label: "Product" },
+];
+const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"];
+const TOOLS = { upscale: "Upscale to 4K", "remove-bg": "Remove background", edit: "Remix photo" };
 
 function getSessionId() {
   let sid = localStorage.getItem("luchii_session");
@@ -30,7 +39,7 @@ function getSessionId() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Image work runs as a server job (photoreal renders take ~2 min) and is polled until done.
+// Image work runs as a server job (local renders take minutes) and is polled until done.
 async function runImageJob(path, body, headers, onQueued) {
   const { data } = await axios.post(`${API}${path}/jobs`, body, { headers });
   for (;;) {
@@ -52,41 +61,104 @@ async function runImageJob(path, body, headers, onQueued) {
   }
 }
 
+const toDataUrl = (blob) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(r.result);
+  r.onerror = rej;
+  r.readAsDataURL(blob);
+});
+
+// Built-in model choice (mirrors backend auto_model) so the result badge and hint are right.
+const ART = /\b(anime|manga|cartoon|illustration|painting|painterly|watercolou?r|sketch|pixel art|vector|logo|icon|comic)\b/i;
+const RENDER = /\b(3d|render|octane|concept art|isometric|low poly|sculpture|claymation)\b/i;
+const autoModel = (p, s) => (ART.test(p) ? "Luchii Dreamline"
+  : RENDER.test(p) && s !== "photorealistic" ? "Luchii Vision"
+  : ({ anime: "Luchii Dreamline", "digital-art": "Luchii Dreamline", "3d": "Luchii Vision" })[s] || "Luchii Nova-Muse");
+
 export default function Generator() {
   const { user, authHeader } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileRef = useRef(null);
+  const inputRef = useRef(null);
 
-  const [mode, setMode] = useState("text"); // 'text' | 'image'
   const [prompt, setPrompt] = useState("");
-  const [style, setStyle] = useState("cinematic");
+  const [style, setStyle] = useState("auto");
   const [aspect, setAspect] = useState("1:1");
-  const [refImage, setRefImage] = useState(null); // data URL of uploaded reference
-  const [loading, setLoading] = useState(false);
-  const [upscaling, setUpscaling] = useState(false);
+  const [refImage, setRefImage] = useState(null); // attached photo => remix / upscale / cutout
+  const [refPrompt, setRefPrompt] = useState(null); // prompt of a showcase image that was opened
+  const [tool, setTool] = useState(null); // upscale | remove-bg | edit (from homepage tools)
+  const [busy, setBusy] = useState(null); // null | generate | remix | upscale | cutout
   const [queued, setQueued] = useState(false);
-  const markQueued = (q) => {
-    setQueued((prev) => {
-      if (q && !prev) toast("Your image is in the queue", { description: "Frasberg Creator is finishing another image. Yours starts next." });
-      return q;
-    });
-  };
   const [image, setImage] = useState(null);
   const [resultId, setResultId] = useState(null);
   const [resultModel, setResultModel] = useState("Luchii Nova-Muse");
-  const [pickModel, setPickModel] = useState(() => LUCHII_PICKER.text.some((m) => m.name === searchParams.get("model")) ? searchParams.get("model") : "Luchii Nova-Muse");
   const [history, setHistory] = useState([]);
-  const [draftMode, setDraftMode] = useState(true); // Nova-Muse quick preview (<1 min) before the full render
-  const [lastDraft, setLastDraft] = useState(null); // {prompt, style, aspect_ratio, model, seed} of the shown draft
-  const [renderingFull, setRenderingFull] = useState(false);
-  const [beforeImage, setBeforeImage] = useState(null); // original photo of a Painter-X remix (for compare)
+  const [beforeImage, setBeforeImage] = useState(null);
   const [comparing, setComparing] = useState(false);
-  const [dims, setDims] = useState(null); // natural size of the shown result
+  const [dims, setDims] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [mode, setMode] = useState("text"); // text | image (the original two-tab template)
+  const remix = mode === "image" && !!refImage;
+  const [chips, setChips] = useState(() => rotatePresets(TEXT_PRESETS, 5));
+  const chipsPaused = useRef(false);
   const is4k = dims && Math.max(dims.w, dims.h) >= 3800;
+  const [resultKind, setResultKind] = useState(null);
+  const isCutout = resultKind === "cutout";
+
+  const markQueued = (q) => setQueued(q);
+
+  // Presets live inside the composer and keep rotating so creators always see new ideas.
+  useEffect(() => {
+    const pool = mode === "image" ? REMIX_PRESETS : TEXT_PRESETS;
+    setChips((c) => rotatePresets(pool, 5, c.map((x) => x.id)));
+    const t = setInterval(() => {
+      if (!chipsPaused.current) setChips((c) => rotatePresets(pool, 5, c.map((x) => x.id)));
+    }, 7000);
+    return () => clearInterval(t);
+  }, [mode]);
+
+  const attachFromUrl = useCallback(async (url) => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      setRefImage(await toDataUrl(blob));
+      setMode("image");
+    } catch (_) {
+      toast.error("Could not load that image.");
+    }
+  }, []);
+
+  // Deep links from the homepage: ?tool=upscale|remove-bg|edit, ?ref=<image>, ?prompt=, ?style=, ?aspect=
+  useEffect(() => {
+    const t = searchParams.get("tool");
+    const legacyMode = searchParams.get("mode");
+    const tl = TOOLS[t] ? t : legacyMode === "image" ? "edit" : null;
+    setTool(tl);
+    if (tl) setMode("image");
+    const p = searchParams.get("prompt") || searchParams.get("preset");
+    const st = searchParams.get("style");
+    const ar = searchParams.get("aspect");
+    const ref = searchParams.get("ref");
+    if (st && STYLES.some((s) => s.id === st)) setStyle(st);
+    if (ar && ASPECTS.includes(ar)) setAspect(ar);
+    if (ref) {
+      attachFromUrl(ref);
+      setRefPrompt(p || null);
+      setPrompt("");
+    } else if (p) setPrompt(p);
+  }, [searchParams, attachFromUrl]);
+
+  useEffect(() => {
+    axios.get(`${API}/generations`, { params: { session_id: getSessionId(), limit: 8 } })
+      .then((res) => setHistory(res.data.map((g) => ({
+        id: g.id, url: g.image_base64, hasFull: !!g.has_full, prompt: g.prompt, kind: g.kind,
+        model: luchiiModelFor(g.kind, g.style, null, g.model),
+      }))))
+      .catch(() => { /* non-critical */ });
+  }, []);
 
   const openHistory = async (h) => {
-    setLastDraft(null); setBeforeImage(null); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse");
+    setBeforeImage(null); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); setResultKind(h.kind || null);
     setImage(h.url);
     if (h.hasFull) { // lists carry a light preview of HD/4K images; load the full file
       try {
@@ -96,142 +168,127 @@ export default function Generator() {
     }
   };
 
-  // Apply tool preset from URL (?mode=text|image&preset=...)
-  useEffect(() => {
-    const m = searchParams.get("mode");
-    const preset = searchParams.get("preset");
-    if (m === "image" || m === "text") setMode(m);
-    if (preset) setPrompt(preset);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await axios.get(`${API}/generations`, {
-          params: { session_id: getSessionId(), limit: 8 },
-        });
-        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, hasFull: !!g.has_full, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style, null, g.model) })));
-      } catch (e) { /* non-critical */ }
-    };
-    load();
-  }, []);
-
-  const shareLink = (id) => `${window.location.origin}/s/${id}`;
-
   const handleShare = async () => {
     if (!resultId) return;
-    const link = shareLink(resultId);
+    const link = `${window.location.origin}/s/${resultId}`;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: "My Frasberg Creator creation", url: link });
-      } else {
-        await navigator.clipboard.writeText(link);
-        toast.success("Share link copied to clipboard!");
-      }
+      if (navigator.share) await navigator.share({ title: "My Frasberg Creator creation", url: link });
+      else { await navigator.clipboard.writeText(link); toast.success("Share link copied to clipboard!"); }
     } catch (e) {
-      try {
-        await navigator.clipboard.writeText(link);
-        toast.success("Share link copied to clipboard!");
-      } catch (_) { /* ignore */ }
+      try { await navigator.clipboard.writeText(link); toast.success("Share link copied to clipboard!"); } catch (_) { /* ignore */ }
     }
   };
 
-  const handleUpload = (e) => {
-    const file = e.target.files?.[0];
+  const readFile = async (file) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => setRefImage(reader.result);
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/")) { toast.error("Please attach an image file."); return; }
+    setRefImage(await toDataUrl(file));
+    setMode("image");
+    setRefPrompt(null);
+    inputRef.current?.focus();
   };
 
-  const isNova = mode === "text" && pickModel === "Luchii Nova-Muse";
-
-  const showResult = (res, usedPrompt, before = null) => {
+  const finish = (res, label, before = null) => {
     const url = res.data.image_base64;
     setImage(url);
-    setBeforeImage(before);
     setResultId(res.data.id);
+    setBeforeImage(before);
     const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
     setResultModel(model);
-    setHistory((h) => [{ id: res.data.id, url, prompt: usedPrompt, model }, ...h].slice(0, 8));
-    setLastDraft(res.data.quality === "draft" ? {
-      prompt: res.data.prompt, style: res.data.style, aspect_ratio: res.data.aspect_ratio, model: res.data.model, seed: res.data.seed,
-    } : null);
+    setResultKind(res.data.kind || null);
+    setHistory((h) => [{ id: res.data.id, url, prompt: label, model, kind: res.data.kind }, ...h].slice(0, 8));
   };
 
-  const handleFullRender = async () => {
-    if (!lastDraft) return;
-    setRenderingFull(true);
-    setLoading(true);
+  const run = async (kind, fn) => {
+    setBusy(kind);
     try {
-      const res = await runImageJob("/generate", { ...lastDraft, quality: "full", session_id: getSessionId() }, authHeader, markQueued);
-      showResult(res, lastDraft.prompt);
-      toast.success("Full-quality render ready!");
+      await fn();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Full render failed. Please try again.");
+      toast.error(e?.response?.data?.detail || "Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
-      setRenderingFull(false);
+      setBusy(null);
       setQueued(false);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      toast.error("Please enter a prompt.");
-      return;
-    }
+  const handleGenerate = () => {
+    if (busy) return;
     if (mode === "image" && !refImage) {
-      toast.error("Please upload a reference image for image-to-image.");
+      toast.error("Upload a photo first.");
+      fileRef.current?.click();
       return;
     }
-    setLoading(true);
-    setImage(null);
-    try {
-      let res;
-      if (mode === "image") {
-        res = await runImageJob("/edit",
-          { prompt, image_base64: refImage, session_id: getSessionId() }, authHeader, markQueued);
-      } else {
-        res = await runImageJob("/generate",
-          { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId(),
-            ...(isNova ? { quality: draftMode ? "draft" : "full" } : {}) }, authHeader, markQueued);
-      }
-      showResult(res, prompt, mode === "image" ? refImage : null);
-      toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
-    } finally {
-      setLoading(false);
-      setQueued(false);
+    if (remix && tool === "upscale") return handleUpscale(refImage);
+    if (remix && tool === "remove-bg") return handleCutout(refImage);
+    if (!prompt.trim()) {
+      toast.error(remix ? "Describe how to change your photo." : "Describe the image you want.");
+      inputRef.current?.focus();
+      return;
     }
+    if (remix) {
+      const src = refImage;
+      return run("remix", async () => {
+        const res = await runImageJob("/edit", {
+          prompt: prompt.trim(), image_base64: src, session_id: getSessionId(), style: style === "auto" ? null : style,
+        }, authHeader, markQueued);
+        finish(res, prompt.trim(), src);
+        toast.success("Remix ready!");
+      });
+    }
+    return run("generate", async () => {
+      setImage(null);
+      const res = await runImageJob("/generate", {
+        prompt: prompt.trim(), style: style === "auto" ? null : style, aspect_ratio: aspect, session_id: getSessionId(), quality: "full",
+      }, authHeader, markQueued);
+      finish(res, prompt.trim());
+      toast.success(user ? "Saved to your gallery!" : "Image ready!");
+    });
   };
 
-  const handleUpscale = async () => {
-    if (!image) return;
-    setUpscaling(true);
-    try {
-      const res = await runImageJob("/upscale",
-        { image_base64: image, session_id: getSessionId(), prompt: prompt || "Upscaled" }, authHeader, markQueued);
-      const url = res.data.image_base64;
-      setImage(url);
-      setResultId(res.data.id);
-      setResultModel("Luchii Prime");
-      setLastDraft(null);
-      setBeforeImage(null);
-      setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K", model: "Luchii Prime" }, ...h].slice(0, 8));
-      toast.success("Upscaled to 4K with Luchii Prime super-resolution!");
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Upscale failed. Please try again.");
-    } finally {
-      setUpscaling(false);
-      setQueued(false);
-    }
+  const handleUpscale = (src = image) => {
+    if (!src || busy) return;
+    run("upscale", async () => {
+      const res = await runImageJob("/upscale", { image_base64: src, session_id: getSessionId(), prompt: "Upscaled to 4K" }, authHeader, markQueued);
+      finish({ data: { ...res.data, model: "Luchii Prime" } }, "Upscaled to 4K", src === image ? null : src);
+      toast.success("Upscaled to 4K!");
+    });
   };
+
+  const handleCutout = (src = image) => {
+    if (!src || busy) return;
+    run("cutout", async () => {
+      const res = await runImageJob("/remove-bg", { image_base64: src, session_id: getSessionId() }, authHeader, markQueued);
+      finish(res, "Background removed", src);
+      toast.success("Background removed!");
+    });
+  };
+
+  const pickChip = (p) => {
+    setPrompt(p.prompt);
+    if (p.style) setStyle(p.style);
+    if (!remix && p.aspect) setAspect(p.aspect);
+    setChips((c) => rotatePresets(mode === "image" ? REMIX_PRESETS : TEXT_PRESETS, 5, [...c.map((x) => x.id), p.id]));
+    inputRef.current?.focus();
+  };
+
+  const useRefPrompt = () => {
+    setRefImage(null);
+    setPrompt(refPrompt);
+    setRefPrompt(null);
+    setTool(null);
+    setMode("text");
+  };
+
+  const eta = { generate: autoModel(prompt, style) === "Luchii Nova-Muse" ? 140 : 45, remix: 190, upscale: 160, cutout: 15 }[busy] || 60;
+  const action = mode === "image" ? (tool === "upscale" ? "Upscale to 4K" : tool === "remove-bg" ? "Remove background" : "Remix") : "Generate";
+  const placeholder = remix
+    ? tool === "upscale" ? "Ready to upscale your photo to 4K. Press the arrow."
+      : tool === "remove-bg" ? "Ready to remove the background. Press the arrow."
+      : "Describe the change, like “make it a snowy winter night”..."
+    : tool === "upscale" ? "Attach a photo to upscale it to 4K..."
+      : tool === "remove-bg" ? "Attach a photo to remove its background..."
+      : tool === "edit" ? "Attach a photo to remix it, then describe the change..."
+      : "Describe the image you want to create...";
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -239,14 +296,11 @@ export default function Generator() {
         <div className="max-w-[1400px] mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
-            <span className="font-display text-lg font-bold">
-              Frasberg Creator
-            </span>
+            <span className="font-display text-lg font-bold">Frasberg Creator</span>
           </Link>
           <div className="flex items-center gap-4">
             {user && (
-              <button onClick={() => navigate("/gallery")}
-                className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white">
+              <button onClick={() => navigate("/gallery")} className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white">
                 <LayoutGrid className="w-4 h-4" /> My gallery
               </button>
             )}
@@ -257,264 +311,198 @@ export default function Generator() {
         </div>
       </header>
 
-      <div className="max-w-[1400px] mx-auto px-5 md:px-8 py-8 grid lg:grid-cols-[1fr_380px] gap-6">
-        {/* Controls */}
-        <div className="space-y-5 lg:order-2">
-          <div>
-            <h1 className="font-display text-2xl font-bold">AI Image Generator</h1>
-            <p className="text-sm text-neutral-500 mt-1">
-              Describe it or remix a photo. Frasberg Creator brings it to life.
-            </p>
-          </div>
-
-          {/* Mode toggle */}
-          <div className="grid grid-cols-2 gap-1 p-1 rounded-full border border-white/10 bg-white/5">
-            {[
-              { id: "text", label: "Text to Image", icon: Type },
-              { id: "image", label: "Image to Image", icon: Images },
-            ].map((m) => (
-              <button key={m.id} onClick={() => setMode(m.id)}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-medium transition-colors ${
-                  mode === m.id ? "bg-[#00F0FF] text-black" : "text-neutral-300 hover:text-white"
-                }`}>
-                <m.icon className="w-4 h-4" /> {m.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#1E2327] p-5 space-y-5">
-            <div data-testid="luchii-model-picker">
-              <label className="text-sm font-medium mb-2 block">Luchii model</label>
-              <div className="grid grid-cols-1 gap-1.5">
-                {LUCHII_PICKER[mode].map((m) => {
-                  const on = mode === "image" || pickModel === m.name;
-                  return (
-                    <button key={m.name} type="button" onClick={() => mode === "text" && setPickModel(m.name)}
-                      data-testid={`luchii-model-${m.name.split(" ")[1].toLowerCase()}`} aria-pressed={on}
-                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${on
-                        ? "border-[#00F0FF]/70 bg-[#00F0FF]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
-                      <img src={brand.luchiiLogo} alt="" className="w-7 h-7 rounded-full object-contain shrink-0" />
-                      <span className="min-w-0">
-                        <span className="flex items-baseline gap-2 min-w-0"><span className="text-xs font-semibold whitespace-nowrap">{m.name}</span>
-                        <span className="text-[11px] text-neutral-500 truncate">{m.desc}</span></span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {mode === "image" && (
-              <div>
-                <label className="text-sm font-medium mb-2 block">Reference image</label>
-                {refImage ? (
-                  <div className="relative rounded-xl overflow-hidden border border-white/10">
-                    <img src={refImage} alt="reference" className="w-full h-40 object-cover" />
-                    <button onClick={() => setRefImage(null)}
-                      className="absolute top-2 right-2 grid place-items-center w-7 h-7 rounded-full bg-black/70 hover:bg-black">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => fileRef.current?.click()}
-                    className="w-full h-32 rounded-xl border border-dashed border-white/15 bg-black/30 grid place-items-center text-neutral-500 hover:border-[#00F0FF]/50 hover:text-neutral-300 transition-colors">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <Upload className="w-5 h-5" />
-                      <span className="text-sm">Upload a photo to remix</span>
-                    </div>
-                  </button>
-                )}
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-              </div>
-            )}
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">
-                  {mode === "image" ? "How to transform it" : "Prompt"}
-                </label>
-                <button
-                  onClick={() => setPrompt(promptSuggestions[Math.floor(Math.random() * promptSuggestions.length)])}
-                  className="inline-flex items-center gap-1 text-xs text-[#00F0FF] hover:underline">
-                  <Dice5 className="w-3.5 h-3.5" /> Surprise me
-                </button>
-              </div>
-              <Textarea data-testid="prompt-input" value={prompt} onChange={(e) => setPrompt(e.target.value)}
-                placeholder={mode === "image"
-                  ? "make it a snowy winter night..."
-                  : "A cinematic portrait of an astronaut in neon rain..."}
-                className="min-h-28 resize-none bg-black/40 border-white/10 focus-visible:ring-[#00F0FF]" />
-            </div>
-
-            {mode === "image" && (
-              <p data-testid="painterx-hint" className="text-[11px] text-neutral-500 -mt-3">
-                Painter-X follows plain edit commands, like “make it snowy” or “turn day into night”, keeps your layout and finishes in HD. Describe the change you want to see in the photo.
-              </p>
-            )}
-
-            {isNova && (
-              <label data-testid="draft-toggle" className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 cursor-pointer">
-                <span className="min-w-0">
-                  <span className="block text-xs font-semibold">Quick draft</span>
-                  <span className="block text-[11px] text-neutral-500">Preview in under a minute, then render full quality</span>
-                </span>
-                <input type="checkbox" data-testid="draft-toggle-input" checked={draftMode} onChange={(e) => setDraftMode(e.target.checked)}
-                  className="w-4 h-4 accent-[#00F0FF] shrink-0" />
-              </label>
-            )}
-
-            {mode === "text" && (
-              <>
-                <PresetRow presets={IMAGE_PRESETS} testid="image-preset"
-                  onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Style</label>
-                  <div className="flex flex-wrap gap-2">
-                    {genStyles.map((s) => (
-                      <button key={s.id} onClick={() => setStyle(s.id)}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium border transition-colors ${
-                          style === s.id ? "bg-[#00F0FF] text-black border-[#00F0FF]"
-                            : "bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10"}`}>
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Aspect ratio</label>
-                  <div className="flex flex-wrap gap-2">
-                    {genAspects.map((a) => (
-                      <button key={a.id} onClick={() => setAspect(a.id)}
-                        className={`rounded-lg px-3.5 py-1.5 text-xs font-medium border transition-colors ${
-                          aspect === a.id ? "bg-[#00F0FF] text-black border-[#00F0FF]"
-                            : "bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10"}`}>
-                        {a.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            <Button data-testid="generate-btn" onClick={handleGenerate} disabled={loading}
-              className="w-full h-11 bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold rounded-full">
-              {loading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</>)
-                : (<><Wand2 className="w-4 h-4 mr-2" /> {mode === "image" ? "Remix image" : "Generate"}</>)}
-            </Button>
-            {!user && (
-              <p className="text-xs text-neutral-500 text-center">
-                Tip: log in to save every creation to your private gallery.
-              </p>
-            )}
-          </div>
+      <main className="max-w-[1180px] mx-auto px-5 md:px-8 py-6 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h1 className="font-display text-2xl font-bold">AI Image Generator</h1>
+          <p className="text-sm text-neutral-500">Type an idea, or attach a photo to remix, upscale or cut out.</p>
         </div>
 
-        {/* Canvas */}
-        <div className="space-y-6 lg:order-1">
-          <div data-testid="result-canvas" className="rounded-2xl border border-white/10 bg-[#1E2327] aspect-video grid place-items-center overflow-hidden relative isolate">
-            {loading ? (
-              <>
-                {mode === "image" && refImage && (
-                  <img src={refImage} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-35" />
+        <div data-testid="result-canvas"
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); readFile(e.dataTransfer.files?.[0]); }}
+          className={`rounded-2xl border bg-[#1E2327] aspect-[4/3] md:aspect-video grid place-items-center overflow-hidden relative isolate ${dragOver ? "border-[#00F0FF]" : "border-white/10"}`}>
+          {busy ? (
+            <>
+              {(image || refImage) && (
+                <img src={busy === "generate" ? image || refImage : refImage || image} alt="" aria-hidden
+                  className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-35" />
+              )}
+              <div data-testid={queued ? "image-queue-notice" : busy === "upscale" ? "upscale-loading" : "image-loading"} className="flex flex-col items-center">
+                <LogoLoader label={queued ? "In the queue" : action} />
+                <RenderProgress queued={queued} eta={eta} testId={busy === "upscale" ? "upscale-progress" : "render-progress"} />
+              </div>
+            </>
+          ) : image ? (
+            <>
+              <img src={image} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-30" />
+              <img data-testid="result-image" src={comparing && beforeImage ? beforeImage : image} alt="Generated"
+                onLoad={(e) => !comparing && setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+                className={`w-full h-full object-contain ${isCutout ? "bg-[conic-gradient(#2a3035_25%,#1f2428_0_50%,#2a3035_0_75%,#1f2428_0)] bg-[length:24px_24px]" : ""}`} />
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                {comparing && beforeImage && (
+                  <span data-testid="compare-before-label" className="rounded-full bg-black/75 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">ORIGINAL</span>
                 )}
-                <div data-testid={queued ? "image-queue-notice" : "image-loading"} className="text-center px-4">
-                  <LogoLoader
-                    label={queued ? "Your image is in the queue..." : renderingFull ? "Rendering full quality..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
-                    sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next."
-                      : renderingFull ? "Luchii Nova-Muse full photoreal render + HD finish"
-                      : mode === "image" ? "Luchii Painter-X is applying your edit, then Luchii Prime sharpens it to HD"
-                      : isNova ? (draftMode ? "Luchii Nova-Muse quick draft" : "Luchii Nova-Muse photoreal render + HD finish")
-                      : "Powered by Frasberg · HD finish by Luchii Prime"}
-                  />
-                  <RenderProgress queued={queued}
-                    eta={renderingFull ? 130 : mode === "image" ? 170 : isNova ? (draftMode ? 50 : 130) : 35} />
-                </div>
-              </>
-            ) : image ? (
-              <>
-                <img src={image} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-30" />
-                <img data-testid="result-image" src={comparing && beforeImage ? beforeImage : image} alt="Generated"
-                  onLoad={(e) => !comparing && setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-                  className="w-full h-full object-contain" />
-                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-                  {comparing && beforeImage && (
-                    <span data-testid="compare-before-label" className="rounded-full bg-black/75 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">ORIGINAL</span>
+                <LuchiiBadge model={resultModel} testId="result-luchii-badge" className="!max-w-none" />
+              </div>
+              <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-end justify-between gap-2 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/30 to-transparent pt-10">
+                <div className="flex items-center gap-2">
+                  {dims && (
+                    <span data-testid="result-resolution" className="inline-flex items-center rounded-full bg-black/70 backdrop-blur px-3 py-1.5 text-[11px] font-semibold tabular-nums">
+                      {is4k ? "4K" : Math.max(dims.w, dims.h) >= 1800 ? "2K" : Math.max(dims.w, dims.h) >= 1000 ? "HD" : "SD"} · {dims.w}×{dims.h}
+                    </span>
                   )}
-                  <LuchiiBadge model={resultModel} testId="result-luchii-badge" className="!max-w-none" />
+                  {beforeImage && (
+                    <button data-testid="compare-btn" type="button"
+                      onMouseDown={() => setComparing(true)} onMouseUp={() => setComparing(false)} onMouseLeave={() => setComparing(false)}
+                      onTouchStart={() => setComparing(true)} onTouchEnd={() => setComparing(false)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-3.5 py-1.5 text-xs font-medium hover:bg-black select-none">
+                      <SplitSquareHorizontal className="w-3.5 h-3.5" /> Hold to compare
+                    </button>
+                  )}
                 </div>
-                {lastDraft && (
-                  <div className="absolute top-4 left-4 flex items-center gap-2">
-                    <span data-testid="draft-badge" className="rounded-full bg-black/70 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">DRAFT</span>
-                    <button data-testid="render-full-btn" onClick={handleFullRender} disabled={loading}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-3.5 py-1.5 text-xs font-semibold hover:bg-[#00d4de] disabled:opacity-60">
-                      <Wand2 className="w-3.5 h-3.5" /> Render full quality
-                    </button>
-                  </div>
-                )}
-                {upscaling && (
-                  <div className="absolute inset-0 z-20 bg-black/75 backdrop-blur-md grid place-items-center">
-                    <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"} className="text-center px-4">
-                      <LogoLoader label={queued ? "Your upscale is in the queue..." : "Upscaling to 4K..."}
-                        sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "Luchii Prime super-resolution · 3840px"} />
-                      <RenderProgress queued={queued} eta={160} testId="upscale-progress" />
-                    </div>
-                  </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-end justify-between gap-2 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/30 to-transparent pt-10">
-                  <div className="flex items-center gap-2">
-                    {dims && (
-                      <span data-testid="result-resolution" className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-3 py-1.5 text-[11px] font-semibold tabular-nums">
-                        {is4k ? "4K" : Math.max(dims.w, dims.h) >= 1000 ? "HD" : "SD"} · {dims.w}×{dims.h}
-                      </span>
-                    )}
-                    {beforeImage && (
-                      <button data-testid="compare-btn" type="button"
-                        onMouseDown={() => setComparing(true)} onMouseUp={() => setComparing(false)} onMouseLeave={() => setComparing(false)}
-                        onTouchStart={() => setComparing(true)} onTouchEnd={() => setComparing(false)}
-                        onKeyDown={(e) => e.key === " " && setComparing(true)} onKeyUp={() => setComparing(false)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-3.5 py-1.5 text-xs font-medium hover:bg-black select-none">
-                        <SplitSquareHorizontal className="w-3.5 h-3.5" /> Hold to compare
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <button data-testid="upscale-btn" onClick={handleUpscale} disabled={upscaling || is4k}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-4 py-2 text-sm font-semibold hover:bg-[#00d4de] disabled:opacity-60">
-                      {is4k ? (<><CheckCircle2 className="w-4 h-4" /> 4K ready</>) : (<><Maximize2 className="w-4 h-4" /> Upscale to 4K</>)}
-                    </button>
-                    <button onClick={handleShare} data-testid="result-share-btn"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
-                      <Share2 className="w-4 h-4" /> Share
-                    </button>
-                    <button onClick={() => downloadWithLuchii(image, is4k ? "frasberg-creator-4k.jpg" : "frasberg-creator.png", resultModel)} data-testid="result-download-btn"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
-                      <Download className="w-4 h-4" /> Download
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-neutral-600">
-                <ImageIcon className="w-10 h-10" />
-                <p className="text-sm">Your generated image will appear here</p>
-              </div>
-            )}
-          </div>
-
-          {history.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
-              <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
-                {history.map((h, i) => (
-                  <button key={i} onClick={() => openHistory(h)} data-testid={`history-item-${i}`}
-                    className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
-                    <img src={h.url} alt="" className="w-full h-full object-cover" />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button data-testid="remix-result-btn" onClick={() => { setRefImage(image); setMode("image"); setRefPrompt(null); setTool("edit"); setPrompt(""); inputRef.current?.focus(); }}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
+                    <Wand2 className="w-4 h-4" /> Remix
                   </button>
-                ))}
+                  <button data-testid="upscale-btn" onClick={() => handleUpscale(image)} disabled={!!busy || is4k}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-4 py-2 text-sm font-semibold hover:bg-[#00d4de] disabled:opacity-60">
+                    {is4k ? (<><CheckCircle2 className="w-4 h-4" /> 4K ready</>) : (<><Maximize2 className="w-4 h-4" /> Upscale to 4K</>)}
+                  </button>
+                  <button onClick={handleShare} data-testid="result-share-btn"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
+                    <Share2 className="w-4 h-4" /> Share
+                  </button>
+                  <button data-testid="result-download-btn"
+                    onClick={() => downloadWithLuchii(image, isCutout ? "frasberg-cutout.png" : is4k ? "frasberg-creator-4k.jpg" : "frasberg-creator.jpg", resultModel)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
+                    <Download className="w-4 h-4" /> Download
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
+          ) : mode === "image" && refImage ? (
+            <>
+              <img src={refImage} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-30" />
+              <img data-testid="attached-preview" src={refImage} alt="Your photo" className="w-full h-full object-contain" />
+              <span className="absolute top-4 left-4 rounded-full bg-black/70 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">YOUR PHOTO</span>
+            </>
+          ) : (
+            <button type="button" onClick={() => (tool ? fileRef.current?.click() : inputRef.current?.focus())}
+              className="flex flex-col items-center gap-3 text-neutral-500 hover:text-neutral-300">
+              <ImageIcon className="w-10 h-10" />
+              <p className="text-sm">{tool ? `Drop or attach a photo to ${TOOLS[tool].toLowerCase()}` : "Your image will appear here · drop a photo to remix it"}</p>
+            </button>
           )}
         </div>
-      </div>
+
+        {/* Composer: prompt, presets, photo, style and size all built into one input */}
+        <div data-testid="composer" className="rounded-3xl border border-white/10 bg-[#1E2327]/95 backdrop-blur p-3 shadow-2xl shadow-black/40 focus-within:border-[#00F0FF]/50 transition-colors">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 [scrollbar-width:none]"
+            onMouseEnter={() => { chipsPaused.current = true; }} onMouseLeave={() => { chipsPaused.current = false; }}>
+            {chips.map((p) => (
+              <button key={p.id} type="button" data-testid={`preset-chip-${p.id}`} onClick={() => pickChip(p)}
+                className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 hover:border-[#00F0FF]/50 hover:bg-[#00F0FF]/10 hover:text-white transition-colors animate-in fade-in duration-500">
+                {p.label}
+              </button>
+            ))}
+            <button type="button" data-testid="preset-shuffle" title="More ideas"
+              onClick={() => setChips((c) => rotatePresets(mode === "image" ? REMIX_PRESETS : TEXT_PRESETS, 5, c.map((x) => x.id)))}
+              className="shrink-0 grid place-items-center w-7 h-7 rounded-full text-neutral-500 hover:text-[#00F0FF]">
+              <Shuffle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {(refImage || tool) && (
+            <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+              {refImage ? (
+                <div data-testid="attached-image" className="relative">
+                  <img src={refImage} alt="attached" className="h-14 w-14 rounded-xl object-cover border border-white/10" />
+                  <button type="button" data-testid="attached-remove" onClick={() => { setRefImage(null); setRefPrompt(null); setMode("text"); setTool(null); }}
+                    className="absolute -top-1.5 -right-1.5 grid place-items-center w-5 h-5 rounded-full bg-black border border-white/20 hover:bg-neutral-800">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" data-testid="attach-big" onClick={() => fileRef.current?.click()}
+                  className="h-14 w-14 rounded-xl border border-dashed border-white/20 grid place-items-center text-neutral-400 hover:border-[#00F0FF]/60 hover:text-white">
+                  <Upload className="w-4 h-4" />
+                </button>
+              )}
+              {[{ id: "edit", icon: Wand2, label: "Remix" }, { id: "upscale", icon: Maximize2, label: "Upscale 4K" }, { id: "remove-bg", icon: Scissors, label: "Remove BG" }].map((t) => {
+                const on = (tool || "edit") === t.id;
+                return (
+                  <button key={t.id} type="button" data-testid={`tool-${t.id}`} onClick={() => { setTool(t.id); setMode("image"); }} aria-pressed={on}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${on ? "bg-[#00F0FF] text-black border-[#00F0FF]" : "border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10"}`}>
+                    <t.icon className="w-3.5 h-3.5" /> {t.label}
+                  </button>
+                );
+              })}
+              {refPrompt && (
+                <button type="button" data-testid="use-ref-prompt" onClick={useRefPrompt}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10">
+                  <Type className="w-3.5 h-3.5" /> Create a new one from its prompt
+                </button>
+              )}
+            </div>
+          )}
+
+          <textarea ref={inputRef} data-testid="prompt-input" value={prompt} rows={2}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleGenerate(); } }}
+            disabled={remix && (tool === "upscale" || tool === "remove-bg")}
+            placeholder={placeholder}
+            className="w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-relaxed placeholder:text-neutral-500 focus:outline-none disabled:opacity-60 min-h-[56px] max-h-48" />
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <button type="button" data-testid="attach-btn" onClick={() => fileRef.current?.click()} title="Attach a photo to remix, upscale or cut out"
+              className="grid place-items-center w-9 h-9 rounded-full text-neutral-400 hover:text-white hover:bg-white/10">
+              <Paperclip className="w-4 h-4" />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" data-testid="attach-input" className="hidden"
+              onChange={(e) => { readFile(e.target.files?.[0]); e.target.value = ""; }} />
+            <button type="button" data-testid="surprise-btn"
+              onClick={() => { setPrompt(surprisePrompt(mode, style === "auto" ? "cinematic" : style)); inputRef.current?.focus(); }}
+              className="inline-flex items-center gap-1.5 h-9 rounded-full px-3 text-xs font-medium text-[#00F0FF] hover:bg-white/10">
+              <Dice5 className="w-4 h-4" /> Surprise me
+            </button>
+            <select data-testid="style-select" value={style} onChange={(e) => setStyle(e.target.value)}
+              className="h-8 rounded-full border border-white/10 bg-black/30 px-3 text-xs text-neutral-200 focus:outline-none focus:border-[#00F0FF]/60">
+              {STYLES.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
+            </select>
+            {mode === "text" && (
+              <select data-testid="aspect-select" value={aspect} onChange={(e) => setAspect(e.target.value)}
+                className="h-8 rounded-full border border-white/10 bg-black/30 px-3 text-xs text-neutral-200 focus:outline-none focus:border-[#00F0FF]/60">
+                {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            )}
+            <span data-testid="auto-model-hint" className="hidden sm:inline text-[11px] text-neutral-500 ml-1 truncate">
+              {mode === "image" ? (tool === "upscale" || tool === "remove-bg" ? "Luchii Prime" : "Luchii Painter-X") : autoModel(prompt, style)}
+            </span>
+            <button type="button" data-testid="generate-btn" onClick={handleGenerate} disabled={!!busy} title={action}
+              className="ml-auto inline-flex items-center gap-2 h-10 rounded-full bg-[#00F0FF] text-black pl-4 pr-3 text-sm font-semibold hover:bg-[#00d4de] disabled:opacity-60">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {busy ? "Working..." : action}
+              {!busy && <ArrowUp className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+        {!user && <p className="text-xs text-neutral-500 text-center">Log in to save every creation to your private gallery.</p>}
+
+        {history.length > 0 && (
+          <div className="pt-2">
+            <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+              {history.map((h, i) => (
+                <button key={`${h.id}-${i}`} onClick={() => openHistory(h)} data-testid={`history-item-${i}`}
+                  className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
+                  <img src={h.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

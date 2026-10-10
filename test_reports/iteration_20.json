@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 20 - End-to-end verification of the /create page quality fixes: HD finishing pass, true-4K upscale, no badge/button overlap, generations preview+has_full, share returns full. Backend: 4/4 new pytest in test_upscale_hd.py pass (upscale job -> 3840px JPEG, /api/generations has_full=true with 768px preview, /api/share returns full 4K, /share 404). Prior test_image_jobs.py suite (7/7) still passes. Frontend /create: Luchii Vision renders in ~20s with data-testid=result-resolution showing 'HD · 1024×1024' and data-testid=result-luchii-badge in the TOP-RIGHT with 17px offset; measured bounding boxes confirm the badge does NOT overlap result-download-btn / result-share-btn / upscale-btn. render-progress visible during generation. Clicking upscale-btn shows upscale-loading + upscale-progress overlay; after ~2-3 min the chip flips to '4K · 3840x3840', the button text becomes '4K ready' and is disabled. Toast 'Upscaled to 4K with Luchii Prime super-resolution!' appears. Recent generations history shows the upscaled thumbnail. /my/generations returns 4 upscales with has_full=True and ~84KB preview image; /share/{id} returns the full 1.5MB JPEG (18x larger).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_upscale_hd.py",
+    "/app/backend/tests/test_image_jobs.py",
+    "/app/test_reports/pytest/iter20_upscale.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "upscale_image() in local_engines.py clamps the input to UPSCALE_BASE=640 then runs Real-ESRGAN x4 and resamples to UPSCALE_LONGEST=3840 - produces a true 4K UHD long edge; verified with Pillow decode of the result data URL.",
+    "save_generation() stores a 768-px JPEG thumb_base64 when the full image exceeds LIST_THUMB_OVER=900k chars; _listed() swaps image_base64 with the thumb and sets has_full=True on list endpoints. /api/share/{id} serves the full image. This correctly keeps /generations and /my/generations light while preserving download/full-view fidelity.",
+    "Generator.jsx layout: result-luchii-badge is absolutely positioned top:4 right:4 inside result-canvas; action buttons (upscale-btn, result-share-btn, result-download-btn) are in a bottom gradient bar. Measured runtime boxes confirm no overlap at 1440x900.",
+    "RenderProgress accepts a testId prop so both generation (render-progress) and upscale (upscale-progress) emit distinct testids - good for test isolation and observed working.",
+    "_hd() blends Lanczos with Real-ESRGAN at SR_BLEND=0.8 - this is why standard renders are now HD (1024x1024 for 1:1) with natural texture instead of the previous blurry 512x512."
+  ],
+  "updated_files": ["/app/backend/tests/test_upscale_hd.py"],
+  "success_rate": {"backend": "100% (4/4 upscale-HD tests + 7/7 image-job tests)", "frontend": "100% (home, /create text-to-image + upscale-to-4K, badge no-overlap, gallery/share integration)"},
+  "test_credentials": "motion.tester@luchiiapp.com / Motion123! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests created 1 Vision generation + 1 4K upscale + 1 noise-image 4K upscale (4 upscales total persisted). All persisted in db.luchii-tools for inspection.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend 4K path and /generations has_full behavior are stable. For has_full to be set, the full JPEG must exceed 900k base64 chars - solid-color test inputs produce tiny 4K JPEGs and will NOT trigger has_full; use noisy inputs (see input_png_b64 fixture). UI pattern that works: API login -> localStorage.setItem('luchii_token', tok) and localStorage.setItem('luchii_session', sid) BEFORE page.reload() to make Recent generations show pre-seeded images. Painter-X image-to-image (edit_job) is tested in backend; UI path uses the same job polling as upscale which is verified, and compare-btn/compare-before-label testids are present in Generator.jsx L440,L470.",
+  "rca of the issue": "N/A - the reported fixes (blurry renders, blurry 'Upscale to 4K', badge overlapping Download button) are all resolved and verified: _hd() super-resolves every render to HD; upscale produces real 3840px output; badge is top-right while buttons are in bottom bar with no overlap."
+}
