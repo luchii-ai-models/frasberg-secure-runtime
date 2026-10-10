@@ -27,7 +27,7 @@ export default function SpaceView() {
       )}
       <div className="absolute top-4 left-4 right-4 flex flex-wrap items-start justify-between gap-3 pointer-events-none">
         <div className="pointer-events-auto rounded-2xl bg-black/55 backdrop-blur px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#00F0FF]">Luchii Space · Powered by Frasberg</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-[#00F0FF]">Frasberg Creator Space · Powered by Frasberg</p>
           <h1 className="text-lg md:text-xl font-semibold" data-testid="space-view-title">{space?.name || (error ? "Space not found" : "Loading…")}</h1>
           {space?.author && <p className="text-xs text-neutral-400">by {space.author}</p>}
         </div>

@@ -5,7 +5,7 @@ import uuid
 import requests
 import pytest
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://fal-video-studio-1.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://b46846a5-88ec-40b8-8362-5bce831bab47.preview.emergentagent.com").rstrip("/")
 GPU = f"{BASE}/api/gpu"
 
 # Load env from backend/.env

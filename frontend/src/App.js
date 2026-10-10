@@ -22,6 +22,8 @@ import ModelShare from "./pages/ModelShare";
 import Spaces from "./pages/Spaces";
 import SpaceEditor from "./pages/SpaceEditor";
 import SpaceView from "./pages/SpaceView";
+import AboutLuchii from "./pages/AboutLuchii";
+import LuchiiAgent from "./pages/LuchiiAgent";
 
 function App() {
   return (
@@ -50,6 +52,8 @@ function App() {
               <Route path="/spaces" element={<Spaces />} />
               <Route path="/spaces/:id" element={<SpaceEditor />} />
               <Route path="/spaces/:id/view" element={<SpaceView />} />
+              <Route path="/agent" element={<LuchiiAgent />} />
+              <Route path="/about-luchii" element={<AboutLuchii />} />
               <Route path="/signup" element={<Login mode="register" />} />
             </Routes>
           </FrasbergStarfieldLayout>

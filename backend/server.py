@@ -5,6 +5,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import asyncio
 import hashlib
+import json
 import os
 import re
 import time
@@ -18,7 +19,7 @@ import httpx
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Form
 import base64
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -53,6 +54,11 @@ STYLE_HINTS = {
     "anime": "anime key visual, vibrant cel shading, clean line art, luminous colors, detailed background, studio quality",
     "digital-art": "digital art, highly detailed concept illustration, vivid cyan and violet palette, glowing highlights, trending on artstation",
     "product": "luxury product photography, seamless studio backdrop, softbox lighting, crisp reflections, commercial advertising shot",
+}
+LUCHII_IMAGE_MODELS = {
+    "Luchii Nova-Muse": "",
+    "Luchii Dreamline": "expressive painterly brushwork, bold vivid color, dreamy artistic atmosphere",
+    "Luchii Vision": "striking concept art, stylized world-building, dramatic cinematic composition",
 }
 UPSCALE_PRESET = "Enhance and upscale this image to crisp 4K detail, preserving the original composition and colors"
 
@@ -188,7 +194,7 @@ async def image_with_fallback(frasberg_payload: dict, local_fn, *args) -> tuple:
     except HTTPException as e:
         logger.warning("Frasberg image failed (%s); using Luchii in-house image engine", e.detail)
     if local_engines.image_busy():
-        raise HTTPException(status_code=429, detail="Luchii is finishing another image. Yours is in the queue.",
+        raise HTTPException(status_code=429, detail="Frasberg Creator is finishing another image. Yours is in the queue.",
                             headers={"Retry-After": "8"})
     try:
         return await asyncio.to_thread(local_fn, *args), "luchii-local"
@@ -210,10 +216,11 @@ async def speak_with_fallback(text: str, voice: Optional[str]) -> dict:
 
 
 async def save_generation(kind: str, prompt: str, image: str, session_id: Optional[str],
-                          user: Optional[dict], style: Optional[str] = None, aspect: Optional[str] = None) -> dict:
+                          user: Optional[dict], style: Optional[str] = None, aspect: Optional[str] = None,
+                          model: Optional[str] = None) -> dict:
     doc = {
         "id": str(uuid.uuid4()), "kind": kind, "prompt": prompt, "style": style,
-        "aspect_ratio": aspect, "image_base64": image, "session_id": session_id,
+        "aspect_ratio": aspect, "model": model, "image_base64": image, "session_id": session_id,
         "user_id": user["id"] if user else None, "author": user.get("name") if user else None,
         "created_at": now_iso(),
     }
@@ -238,6 +245,7 @@ class GenerateIn(BaseModel):
     style: Optional[str] = "cinematic"
     aspect_ratio: Optional[str] = "1:1"
     session_id: Optional[str] = None
+    model: Optional[str] = None
 
 
 class EditIn(BaseModel):
@@ -261,7 +269,7 @@ class TTSIn(BaseModel):
 # ---------- routes ----------
 @api.get("/")
 async def root():
-    return {"message": "Luchii API is running"}
+    return {"message": "Frasberg Creator API is running"}
 
 
 @api.post("/auth/register")
@@ -301,14 +309,16 @@ async def me(user: dict = Depends(current_user)):
 
 @api.post("/generate")
 async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_user)):
-    hint = STYLE_HINTS.get(body.style or "", "")
+    model = body.model if body.model in LUCHII_IMAGE_MODELS else None
+    hint = ", ".join(h for h in (LUCHII_IMAGE_MODELS.get(model or ""), STYLE_HINTS.get(body.style or "", "")) if h)
     full = f"{body.prompt}. {hint}. Aspect ratio {body.aspect_ratio}." if hint else body.prompt
     img, engine = await gpu_image(full, body.aspect_ratio), "frasberg-image"
     if not img:
         img, engine = await image_with_fallback({"prompt": full, "style": body.style, "aspect_ratio": body.aspect_ratio},
                                                 local_engines.generate_image, full, body.aspect_ratio)
-    doc = await save_generation("generate", body.prompt, img, body.session_id, user, body.style, body.aspect_ratio)
-    return {"id": doc["id"], "image_base64": img, "prompt": body.prompt, "style": body.style, "engine": engine}
+    doc = await save_generation("generate", body.prompt, img, body.session_id, user, body.style, body.aspect_ratio, model)
+    return {"id": doc["id"], "kind": "generate", "image_base64": img, "prompt": body.prompt, "style": body.style,
+            "model": model, "engine": engine}
 
 
 @api.post("/edit")
@@ -316,7 +326,7 @@ async def edit(body: EditIn, user: Optional[dict] = Depends(optional_user)):
     img, engine = await image_with_fallback({"prompt": body.prompt, "image_base64": strip_data_url(body.image_base64)},
                                             local_engines.edit_image, body.prompt, body.image_base64)
     doc = await save_generation("edit", body.prompt, img, body.session_id, user, "Remix")
-    return {"id": doc["id"], "image_base64": img, "prompt": body.prompt, "engine": engine}
+    return {"id": doc["id"], "kind": "edit", "model": "Luchii Painter-X", "image_base64": img, "prompt": body.prompt, "engine": engine}
 
 
 @api.post("/upscale")
@@ -324,7 +334,7 @@ async def upscale(body: UpscaleIn, user: Optional[dict] = Depends(optional_user)
     img, engine = await image_with_fallback({"prompt": UPSCALE_PRESET, "image_base64": strip_data_url(body.image_base64)},
                                             local_engines.upscale_image, body.image_base64)
     doc = await save_generation("upscale", body.prompt or "Upscaled", img, body.session_id, user, "Upscale 4K")
-    return {"id": doc["id"], "image_base64": img, "prompt": body.prompt, "engine": engine}
+    return {"id": doc["id"], "kind": "upscale", "model": "Luchii Prime", "image_base64": img, "prompt": body.prompt, "engine": engine}
 
 
 @api.post("/tts")
@@ -354,7 +364,7 @@ async def showcase(limit: int = 8):
 @api.get("/share/{gen_id}")
 async def share(gen_id: str):
     doc = await db.generations.find_one({"id": gen_id},
-                                        {"_id": 0, "id": 1, "prompt": 1, "style": 1, "image_base64": 1, "author": 1})
+                                        {"_id": 0, "id": 1, "kind": 1, "model": 1, "prompt": 1, "style": 1, "image_base64": 1, "author": 1})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     return doc
@@ -520,13 +530,24 @@ class JobIn(BaseModel):
     model: Optional[str] = None          # Frasberg GPU engine id (video only)
     aspect_ratio: Optional[str] = "16:9"
     image_base64: Optional[str] = None   # start frame for image-to-video
+    luchii_model: Optional[str] = None
+
+
+LUCHII_MEDIA_MODELS = {"video": ("Luchii Cinematica", "Luchii Animus"), "music": ("Luchii Harmonia",)}
+
+
+def luchii_media_model(kind: str, requested: Optional[str], has_image: bool) -> str:
+    if requested in LUCHII_MEDIA_MODELS.get(kind, ()):
+        return requested
+    return ("Luchii Animus" if has_image else "Luchii Cinematica") if kind == "video" else "Luchii Harmonia"
 
 
 async def job_out(job: dict) -> dict:
     out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "prompt": job.get("prompt"),
            "style": job.get("style"), "duration": job.get("duration"), "error": job.get("error"),
            "engine": ENGINE_LABELS.get(job.get("render_engine") or "", job.get("render_engine")), "model": job.get("model"),
-           "mode": "image-to-video" if job.get("has_image") else None, "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
+           "mode": "image-to-video" if job.get("has_image") else None,
+           "luchii_model": job.get("luchii_model"), "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
     if job["status"] == "queued":
         out["queue_position"] = await db.jobs.count_documents(
             {"kind": job["kind"], "engine": "local", "status": {"$in": ["queued", "running"]},
@@ -659,6 +680,7 @@ async def create_media_job(kind: str, body: JobIn, user: Optional[dict]):
            "style": body.style, "duration": max(lo, min(hi, body.duration)), "error": None,
            "model": body.model if kind == "video" else None, "aspect_ratio": body.aspect_ratio or "16:9",
            "has_image": bool(body.image_base64 and kind == "video"),
+           "luchii_model": luchii_media_model(kind, body.luchii_model, bool(body.image_base64 and kind == "video")),
            "user_id": user["id"] if user else None, "created_at": now_iso()}
     await db.jobs.insert_one(job.copy())
     asyncio.create_task(run_media({**job, "image_base64": body.image_base64 if kind == "video" else None}))
@@ -681,7 +703,7 @@ ENGINE_LABELS = {"luchii-local": "Frasberg Lite (CPU)", "frasberg": "Frasberg Ed
 def video_card(j: dict) -> dict:
     return {"id": j["id"], "prompt": j.get("prompt"), "style": j.get("style"), "duration": j.get("duration"),
             "engine": ENGINE_LABELS.get(j.get("render_engine") or "", j.get("render_engine")) or "Frasberg Lite (CPU)",
-            "model": j.get("model"),
+            "model": j.get("model"), "luchii_model": j.get("luchii_model"),
             "mode": "image-to-video" if j.get("has_image") else "text-to-video",
             "aspect_ratio": j.get("aspect_ratio") or "16:9", "url": f"/api/media/{j['id']}",
             "author": j.get("author"), "created_at": j.get("created_at"), "finished_at": j.get("finished_at")}
@@ -712,6 +734,43 @@ async def media_file(job_id: str):
         raise HTTPException(status_code=404, detail="Not ready")
     stream = await media_fs.open_download_stream(job["file_id"])
     return Response(content=await stream.read(), media_type=job["mime"], headers={"Accept-Ranges": "none"})
+
+
+LUCHII_MARK = Path(__file__).parent / "assets" / "luchii-logo.png"
+
+
+def _watermark_video(data: bytes) -> bytes:
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d) / "in.mp4", Path(d) / "out.mp4"
+        src.write_bytes(data)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-i", str(LUCHII_MARK), "-filter_complex",
+                        "[1:v][0:v]scale2ref=w=oh*mdar:h=ih*0.14[mk][base];[mk]format=rgba,colorchannelmixer=aa=0.85[m];"
+                        "[base][m]overlay=W-w-W*0.03:H-h-H*0.04",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-c:a", "copy",
+                        "-movflags", "+faststart", str(out)], check=True, timeout=180)
+        return out.read_bytes()
+
+
+@api.get("/media/{job_id}/download")
+async def media_download(job_id: str):
+    job = await db.jobs.find_one({"id": job_id, "status": "completed", "engine": "local"}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Not ready")
+    name = f"luchii-{job['kind']}-{job_id[:8]}.{'mp4' if job['kind'] == 'video' else 'wav'}"
+    headers = {"Content-Disposition": f'attachment; filename="{name}"'}
+    if job["kind"] != "video":
+        stream = await media_fs.open_download_stream(job["file_id"])
+        return Response(content=await stream.read(), media_type=job["mime"], headers=headers)
+    if not job.get("marked_file_id"):
+        raw = await (await media_fs.open_download_stream(job["file_id"])).read()
+        marked = await asyncio.to_thread(_watermark_video, raw)
+        fid = await media_fs.upload_from_stream(name, marked, metadata={"job_id": job_id, "luchii_mark": True})
+        await db.jobs.update_one({"id": job_id}, {"$set": {"marked_file_id": fid}})
+        job["marked_file_id"] = fid
+    stream = await media_fs.open_download_stream(job["marked_file_id"])
+    return Response(content=await stream.read(), media_type="video/mp4", headers=headers)
 
 
 @api.get("/jobs/{job_id}")
@@ -1078,11 +1137,215 @@ async def gpu_admin_notebook(request: Request, gateway: str, models: str = "fras
         raise HTTPException(status_code=422, detail="gateway must be an https URL ending in /api/gpu")
     own_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].split(":")[0]
     if urlparse(gateway).hostname != own_host:
-        raise HTTPException(status_code=422, detail="gateway must point at this Luchii server")
+        raise HTTPException(status_code=422, detail="gateway must point at this Frasberg Creator server")
     wanted = [m for m in models.split(",") if m in frasberg_gpu.MODELS]
     nb = frasberg_gpu.build_notebook(gateway, os.environ["FRASBERG_WORKER_SECRET"], ",".join(wanted) or "frasberg-motion-free")
     return Response(content=_json.dumps(nb, indent=1), media_type="application/x-ipynb+json",
                     headers={"Content-Disposition": 'attachment; filename="frasberg-free-gpu-worker.ipynb"'})
+
+
+LUCHII_CHAT_FALLBACK = ["luchii-6-plus", "luchii-6-mini", "luchii-70b", "luchii-7b", "luchii-1b"]
+
+
+async def chat_owner(request: Request, user: Optional[dict] = Depends(optional_user)) -> str:
+    key = request.headers.get("X-Frasberg-Key", "")
+    if user:
+        return user["id"]
+    if key and key in FRASBERG_KEYS:
+        return f"platform:{key[9:17]}"
+    raise HTTPException(status_code=401, detail="Sign in or send a valid X-Frasberg-Key")
+
+
+class ChatSendIn(BaseModel):
+    message: str = Field(min_length=1, max_length=8000)
+    model: str = "luchii-6-plus"
+    conversation_id: Optional[str] = None
+
+
+class AgentTaskIn(BaseModel):
+    type: str = Field(pattern="^(image|video|music)$")
+    prompt: str = Field(min_length=1, max_length=500)
+    style: Optional[str] = None
+    model: Optional[str] = None
+    duration: int = 8
+    conversation_id: Optional[str] = None
+
+
+@api.get("/chat/models")
+async def chat_models():
+    try:
+        r, _ = await frasberg("GET", "/v1/models", feature="chat")
+        ids = [m["id"] for m in r.json().get("data", []) if (m.get("capabilities") or {}).get("chat")]
+    except HTTPException:
+        ids = []
+    return {"default": "luchii-6-plus", "models": [{"id": i, "owned_by": "frasberg"} for i in (ids or LUCHII_CHAT_FALLBACK)]}
+
+
+@api.get("/chat/conversations")
+async def chat_conversations(owner: str = Depends(chat_owner)):
+    return await db.chat_conversations.find({"owner": owner}, {"_id": 0, "messages": 0}).sort("updated_at", -1).to_list(100)
+
+
+@api.get("/chat/conversations/{cid}")
+async def chat_conversation(cid: str, owner: str = Depends(chat_owner)):
+    c = await db.chat_conversations.find_one({"id": cid, "owner": owner}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return c
+
+
+@api.delete("/chat/conversations/{cid}")
+async def chat_delete(cid: str, owner: str = Depends(chat_owner)):
+    await db.chat_conversations.delete_one({"id": cid, "owner": owner})
+    return {"ok": True}
+
+
+async def _luchii_stream(payload: dict):
+    async with httpx.AsyncClient(timeout=120) as hc:
+        for i in key_order("chat"):
+            try:
+                async with hc.stream("POST", f"{FRASBERG_BASE}/v1/chat", json=payload,
+                                     headers={"Authorization": f"Bearer {FRASBERG_KEYS[i]}"}) as r:
+                    if r.status_code >= 400:
+                        continue
+                    async for line in r.aiter_lines():
+                        if line.startswith("data:"):
+                            try:
+                                yield json.loads(line[5:].strip())
+                            except ValueError:
+                                continue
+                    return
+            except httpx.HTTPError:
+                continue
+    yield {"error": "Luchii Chat is unavailable right now"}
+
+
+@api.post("/chat/send")
+async def chat_send(body: ChatSendIn, owner: str = Depends(chat_owner)):
+    conv = await db.chat_conversations.find_one({"id": body.conversation_id, "owner": owner}, {"_id": 0}) if body.conversation_id else None
+    if not conv:
+        conv = {"id": str(uuid.uuid4()), "owner": owner, "title": body.message[:60], "model": body.model,
+                "session_id": None, "messages": [], "created_at": now_iso(), "updated_at": now_iso()}
+        await db.chat_conversations.insert_one(conv.copy())
+    payload = {"message": body.message, "model": body.model}
+    if conv.get("session_id"):
+        payload["session_id"] = conv["session_id"]
+
+    async def events():
+        text, sid, err = "", conv.get("session_id"), None
+        yield f"data: {json.dumps({'conversation_id': conv['id'], 'model': body.model})}\n\n"
+        async for ev in _luchii_stream(payload):
+            if ev.get("delta"):
+                text += ev["delta"]
+                yield f"data: {json.dumps({'delta': ev['delta']})}\n\n"
+            sid = ev.get("session_id") or sid
+            err = ev.get("error") or err
+        if "turbulence" in text.lower():
+            err = "Luchii Chat (Frasberg) replied with a turbulence error"
+        now = now_iso()
+        await db.chat_conversations.update_one({"id": conv["id"]}, {
+            "$set": {"session_id": sid, "model": body.model, "updated_at": now},
+            "$push": {"messages": {"$each": [{"role": "user", "content": body.message, "at": now},
+                                             {"role": "assistant", "content": text.strip(), "model": body.model,
+                                              "error": err, "at": now}]}}})
+        yield f"data: {json.dumps({'done': True, 'error': err, 'conversation_id': conv['id']})}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+async def _run_agent_task(task: dict, user: Optional[dict]):
+    try:
+        if task["type"] == "image":
+            body = GenerateIn(prompt=task["prompt"], style=task.get("style") or "cinematic", model=task.get("model"))
+            for attempt in range(60):
+                try:
+                    res = await generate(body, user)
+                    break
+                except HTTPException as e:
+                    if e.status_code != 429 or attempt == 59:
+                        raise
+                    await db.agent_tasks.update_one({"id": task["id"]}, {"$set": {"status": "waiting", "updated_at": now_iso()}})
+                    await asyncio.sleep(10)
+            result = {"generation_id": res["id"], "share_url": f"/s/{res['id']}"}
+        else:
+            res = await create_media_job(task["type"], JobIn(prompt=task["prompt"], style=task.get("style"),
+                                                             duration=task.get("duration", 8)), user)
+            result = {"job_id": res["job_id"]}
+        await db.agent_tasks.update_one({"id": task["id"]}, {"$set": {"status": "dispatched", "result": result, "updated_at": now_iso()}})
+    except Exception as e:  # noqa: BLE001
+        detail = e.detail if isinstance(e, HTTPException) else e.__class__.__name__
+        await db.agent_tasks.update_one({"id": task["id"]}, {"$set": {"status": "failed", "error": str(detail), "updated_at": now_iso()}})
+
+
+@api.post("/chat/agents/tasks")
+async def agent_task(body: AgentTaskIn, owner: str = Depends(chat_owner), user: Optional[dict] = Depends(optional_user)):
+    task = {"id": str(uuid.uuid4()), "owner": owner, **body.model_dump(), "status": "queued",
+            "result": None, "error": None, "created_at": now_iso(), "updated_at": now_iso()}
+    await db.agent_tasks.insert_one(task.copy())
+    asyncio.create_task(_run_agent_task(task, user))
+    return task
+
+
+class AgentBundleIn(BaseModel):
+    idea: str = Field(min_length=1, max_length=400)
+    image_model: Optional[str] = None
+    style: Optional[str] = None
+
+
+async def _wait_job(job_id: str, timeout: int = 1800):
+    for _ in range(timeout // 5):
+        j = await db.jobs.find_one({"id": job_id}, {"_id": 0, "status": 1})
+        if not j or j["status"] in ("completed", "failed"):
+            return
+        await asyncio.sleep(5)
+
+
+async def _run_bundle(tasks: list, user: Optional[dict]):
+    for t in tasks:
+        await _run_agent_task(t, user)
+        done = await db.agent_tasks.find_one({"id": t["id"]}, {"_id": 0})
+        if done and (done.get("result") or {}).get("job_id"):
+            await _wait_job(done["result"]["job_id"])
+
+
+@api.post("/chat/agents/bundle")
+async def agent_bundle(body: AgentBundleIn, owner: str = Depends(chat_owner), user: Optional[dict] = Depends(optional_user)):
+    bundle_id, now = str(uuid.uuid4()), now_iso()
+    idea = body.idea.strip()
+    specs = [("image", idea, body.style or "cinematic", body.image_model, 0),
+             ("video", f"{idea}, cinematic camera movement", body.style or "cinematic", None, 5),
+             ("music", f"Soundtrack for: {idea}", None, None, 15)]
+    tasks = [{"id": str(uuid.uuid4()), "bundle_id": bundle_id, "owner": owner, "type": ty, "prompt": pr[:500],
+              "style": st, "model": mo, "duration": du, "conversation_id": None, "status": "queued",
+              "result": None, "error": None, "created_at": now, "updated_at": now} for ty, pr, st, mo, du in specs]
+    await db.agent_tasks.insert_many([t.copy() for t in tasks])
+    asyncio.create_task(_run_bundle(tasks, user))
+    return {"bundle_id": bundle_id, "idea": idea, "tasks": tasks}
+
+
+@api.get("/chat/agents/bundle/{bid}")
+async def agent_bundle_status(bid: str, owner: str = Depends(chat_owner)):
+    tasks = await db.agent_tasks.find({"bundle_id": bid, "owner": owner}, {"_id": 0}).to_list(10)
+    if not tasks:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    for t in tasks:
+        res = t.get("result") or {}
+        if res.get("job_id"):
+            j = await db.jobs.find_one({"id": res["job_id"]}, {"_id": 0})
+            t["job"] = await job_out(j) if j else None
+    order = {"image": 0, "video": 1, "music": 2}
+    return {"bundle_id": bid, "tasks": sorted(tasks, key=lambda t: order[t["type"]])}
+
+
+@api.get("/chat/agents/tasks/{tid}")
+async def agent_task_status(tid: str, owner: str = Depends(chat_owner)):
+    t = await db.agent_tasks.find_one({"id": tid, "owner": owner}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if t.get("result", {}) and t["result"].get("job_id"):
+        j = await db.jobs.find_one({"id": t["result"]["job_id"]}, {"_id": 0})
+        t["job"] = await job_out(j) if j else None
+    return t
 
 
 app.include_router(api)

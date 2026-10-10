@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
+import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search, Clapperboard, RotateCcw, ExternalLink } from "lucide-react";
@@ -81,6 +83,7 @@ function VideoCard({ v }) {
         <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
           className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
+        <LuchiiBadge overlay model={videoModel(v)} className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
@@ -91,11 +94,11 @@ function VideoCard({ v }) {
       <div className="p-3 space-y-2 mt-auto">
         <p className="text-xs text-neutral-300 line-clamp-2" title={v.prompt}>{v.prompt}</p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] text-neutral-500 truncate">{v.engine} · {v.duration}s</span>
+          <span className="text-[10px] text-neutral-500 truncate">{v.duration}s · {v.aspect_ratio}</span>
           <div className="flex items-center gap-2.5 shrink-0">
             <button onClick={replay} title="Replay" data-testid={`gallery-video-replay-${v.id}`} className="text-white/70 hover:text-white"><RotateCcw className="w-4 h-4" /></button>
             <button onClick={() => shareVideo(v.id)} title="Share" data-testid={`gallery-video-share-${v.id}`} className="text-white/70 hover:text-white"><Share2 className="w-4 h-4" /></button>
-            <a href={src} download={`frasberg-motion-${v.id.slice(0, 8)}.mp4`} title="Download" data-testid={`gallery-video-download-${v.id}`} className="text-white/70 hover:text-white"><Download className="w-4 h-4" /></a>
+            <a href={`${src}/download`} download={`luchii-video-${v.id.slice(0, 8)}.mp4`} title="Download" data-testid={`gallery-video-download-${v.id}`} className="text-white/70 hover:text-white"><Download className="w-4 h-4" /></a>
             <Link to={`/v/${v.id}`} title="Open" data-testid={`gallery-video-open-${v.id}`} className="text-white/70 hover:text-white"><ExternalLink className="w-4 h-4" /></Link>
           </div>
         </div>
@@ -104,12 +107,43 @@ function VideoCard({ v }) {
   );
 }
 
+function ModelFilter({ options, value, onChange }) {
+  if (options.length < 2) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mb-5" data-testid="gallery-model-filter">
+      {["All", ...options].map((m) => (
+        <button key={m} onClick={() => onChange(m)} data-testid={`gallery-model-filter-${m.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+          className={`inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 text-xs border transition-colors ${value === m
+            ? "bg-[#00F0FF]/15 border-[#00F0FF]/60 text-white" : "border-white/10 bg-white/5 text-neutral-400 hover:text-white"}`}>
+          {m === "All" ? <span className="w-5 h-5 grid place-items-center">·</span> : <img src={brand.luchiiLogo} alt="" className="w-5 h-5 rounded-full object-contain" />}
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const useModelFilter = (list, modelOf) => {
+  const [model, setModel] = useState("All");
+  const options = useMemo(() => [...new Set(list.map(modelOf))].sort(), [list]); // eslint-disable-line
+  const active = options.includes(model) ? model : "All";
+  const shown = active === "All" ? list : list.filter((x) => modelOf(x) === active);
+  return { model: active, setModel, options, shown };
+};
+
+const videoModel = (v) => luchiiModelFor("video", null, v.mode, v.luchii_model);
+const imageModel = (g) => luchiiModelFor(g.kind, g.style, null, g.model);
+
 function VideosList({ videos }) {
+  const f = useModelFilter(videos, videoModel);
   if (!videos.length) return <Empty text="No Frasberg Motion clips yet." to="/video" cta="Open Video Creator" />;
   return (
+    <>
+    <ModelFilter options={f.options} value={f.model} onChange={f.setModel} />
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start" data-testid="gallery-videos">
-      {videos.map((v) => <VideoCard key={v.id} v={v} />)}
+      {f.shown.map((v) => <VideoCard key={v.id} v={v} />)}
     </div>
+    </>
   );
 }
 
@@ -141,6 +175,7 @@ export default function Gallery() {
   const [takes, setTakes] = useState([]);
   const [models, setModels] = useState([]);
   const [videos, setVideos] = useState([]);
+  const imgFilter = useModelFilter(items, imageModel);
 
   useEffect(() => {
     if (loading) return;
@@ -171,8 +206,8 @@ export default function Gallery() {
       <header className="sticky top-0 z-40 bg-[#12171B]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-[1400px] mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={brand.logo} alt="Luchii logo" className="w-9 h-9 rounded-full object-contain" />
-            <span className="font-display text-lg font-bold">Luchii</span>
+            <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
+            <span className="font-display text-lg font-bold">Frasberg Creator</span>
           </Link>
           <Link to="/create" className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white">
             <ArrowLeft className="w-4 h-4" /> Back to create
@@ -184,7 +219,7 @@ export default function Gallery() {
         <div className="flex items-end justify-between mb-8">
           <div>
             <h1 className="font-display text-3xl font-bold">My gallery</h1>
-            <p className="text-sm text-neutral-500 mt-1">Everything you've created with Luchii.</p>
+            <p className="text-sm text-neutral-500 mt-1">Everything you've created with Frasberg Creator.</p>
           </div>
           <Button onClick={() => navigate("/create")}
             className="bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold rounded-full">
@@ -216,10 +251,13 @@ export default function Gallery() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((g) => (
+          <>
+          <ModelFilter options={imgFilter.options} value={imgFilter.model} onChange={imgFilter.setModel} />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" data-testid="gallery-images">
+            {imgFilter.shown.map((g) => (
               <div key={g.id} className="group relative rounded-xl overflow-hidden border border-white/10 bg-[#1E2327]">
                 <img src={g.image_base64} alt={g.prompt} className="w-full aspect-square object-cover" />
+                <LuchiiBadge overlay model={imageModel(g)} className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="absolute bottom-0 inset-x-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="text-xs text-neutral-200 line-clamp-2">{g.prompt}</p>
@@ -234,15 +272,17 @@ export default function Gallery() {
                         className="text-white/80 hover:text-white" title="Copy share link">
                         <Share2 className="w-4 h-4" />
                       </button>
-                      <a href={g.image_base64} download className="text-white/80 hover:text-white" title="Download">
+                      <button onClick={() => downloadWithLuchii(g.image_base64, `frasberg-creator-${g.id.slice(0, 8)}.png`, luchiiModelFor(g.kind, g.style))}
+                        data-testid={`gallery-download-${g.id}`} className="text-white/80 hover:text-white" title="Download">
                         <Download className="w-4 h-4" />
-                      </a>
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
     </div>

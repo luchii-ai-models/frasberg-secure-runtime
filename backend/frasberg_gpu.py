@@ -421,7 +421,7 @@ def build_notebook(gateway: str, secret: str, models: str = "frasberg-motion-fre
     cells = [
         _cell("markdown", f"""
 # Frasberg GPU Worker - free T4 (Kaggle / Colab)
-This notebook turns a free GPU into a **Frasberg Motion Free** render node for your Luchii app.
+This notebook turns a free GPU into a **Frasberg Motion Free** render node for your Frasberg Creator app.
 
 **Kaggle:** Settings → Accelerator **GPU T4 x1**, Internet **On**, then *Run All*. That gives you 30 free GPU-hours a week.
 **Colab:** Runtime → Change runtime type → **T4 GPU**, then *Run all*.

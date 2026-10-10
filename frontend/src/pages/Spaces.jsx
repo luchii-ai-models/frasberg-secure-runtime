@@ -51,7 +51,7 @@ export default function Spaces() {
       <Navbar />
       <main className="max-w-[1200px] mx-auto px-5 md:px-8 pt-28 pb-24" data-testid="spaces-page">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 mb-5">
-          <Boxes className="w-3.5 h-3.5 text-[#00F0FF]" /> Luchii Spaces Builder · Powered by Frasberg
+          <Boxes className="w-3.5 h-3.5 text-[#00F0FF]" /> Frasberg Creator Spaces Builder · Powered by Frasberg
         </div>
         <div className="flex flex-col md:flex-row md:items-end gap-4 justify-between">
           <div>

@@ -5,7 +5,7 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://fal-video-studio-1.preview.emergentagent.com"
+BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://b46846a5-88ec-40b8-8362-5bce831bab47.preview.emergentagent.com"
 API = f"{BASE_URL}/api"
 
 TEST_EMAIL = "test@luchii.ai"

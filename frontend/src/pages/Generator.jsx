@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { LuchiiBadge, luchiiModelFor, LUCHII_PICKER } from "../components/LuchiiBadge";
+import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -55,12 +57,14 @@ export default function Generator() {
   const [queued, setQueued] = useState(false);
   const markQueued = (q) => {
     setQueued((prev) => {
-      if (q && !prev) toast("Your image is in the queue", { description: "Luchii is finishing another image. Yours starts next." });
+      if (q && !prev) toast("Your image is in the queue", { description: "Frasberg Creator is finishing another image. Yours starts next." });
       return q;
     });
   };
   const [image, setImage] = useState(null);
   const [resultId, setResultId] = useState(null);
+  const [resultModel, setResultModel] = useState("Luchii Nova-Muse");
+  const [pickModel, setPickModel] = useState(() => LUCHII_PICKER.text.some((m) => m.name === searchParams.get("model")) ? searchParams.get("model") : "Luchii Nova-Muse");
   const [history, setHistory] = useState([]);
 
   // Apply tool preset from URL (?mode=text|image&preset=...)
@@ -77,7 +81,7 @@ export default function Generator() {
         const res = await axios.get(`${API}/generations`, {
           params: { session_id: getSessionId(), limit: 8 },
         });
-        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt })));
+        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style, null, g.model) })));
       } catch (e) { /* non-critical */ }
     };
     load();
@@ -90,7 +94,7 @@ export default function Generator() {
     const link = shareLink(resultId);
     try {
       if (navigator.share) {
-        await navigator.share({ title: "My Luchii creation", url: link });
+        await navigator.share({ title: "My Frasberg Creator creation", url: link });
       } else {
         await navigator.clipboard.writeText(link);
         toast.success("Share link copied to clipboard!");
@@ -133,13 +137,15 @@ export default function Generator() {
           { prompt, image_base64: refImage, session_id: getSessionId() }, authHeader, markQueued);
       } else {
         res = await postQueued(`${API}/generate`,
-          { prompt, style, aspect_ratio: aspect, session_id: getSessionId() }, authHeader, markQueued);
+          { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId() }, authHeader, markQueued);
       }
       const url = res.data.image_base64;
       setImage(url);
       setResultId(res.data.id);
-      setHistory((h) => [{ id: res.data.id, url, prompt }, ...h].slice(0, 8));
-      toast.success(user ? "Saved to your gallery!" : "Image generated with Luchii!");
+      const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
+      setResultModel(model);
+      setHistory((h) => [{ id: res.data.id, url, prompt, model }, ...h].slice(0, 8));
+      toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
     } finally {
@@ -157,7 +163,8 @@ export default function Generator() {
       const url = res.data.image_base64;
       setImage(url);
       setResultId(res.data.id);
-      setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K" }, ...h].slice(0, 8));
+      setResultModel("Luchii Prime");
+      setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K", model: "Luchii Prime" }, ...h].slice(0, 8));
       toast.success("Enhanced & upscaled (AI 4K re-render)!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upscale failed. Please try again.");
@@ -172,9 +179,9 @@ export default function Generator() {
       <header className="sticky top-0 z-40 bg-[#12171B]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-[1400px] mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={brand.logo} alt="Luchii logo" className="w-9 h-9 rounded-full object-contain" />
+            <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
             <span className="font-display text-lg font-bold">
-              Luchii
+              Frasberg Creator
             </span>
           </Link>
           <div className="flex items-center gap-4">
@@ -197,7 +204,7 @@ export default function Generator() {
           <div>
             <h1 className="font-display text-2xl font-bold">AI Image Generator</h1>
             <p className="text-sm text-neutral-500 mt-1">
-              Describe it or remix a photo. Luchii brings it to life.
+              Describe it or remix a photo. Frasberg Creator brings it to life.
             </p>
           </div>
 
@@ -217,6 +224,26 @@ export default function Generator() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#1E2327] p-5 space-y-5">
+            <div data-testid="luchii-model-picker">
+              <label className="text-sm font-medium mb-2 block">Luchii model</label>
+              <div className="grid grid-cols-1 gap-1.5">
+                {LUCHII_PICKER[mode].map((m) => {
+                  const on = mode === "image" || pickModel === m.name;
+                  return (
+                    <button key={m.name} type="button" onClick={() => mode === "text" && setPickModel(m.name)}
+                      data-testid={`luchii-model-${m.name.split(" ")[1].toLowerCase()}`} aria-pressed={on}
+                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${on
+                        ? "border-[#00F0FF]/70 bg-[#00F0FF]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+                      <img src={brand.luchiiLogo} alt="" className="w-7 h-7 rounded-full object-contain shrink-0" />
+                      <span className="min-w-0">
+                        <span className="flex items-baseline gap-2 min-w-0"><span className="text-xs font-semibold whitespace-nowrap">{m.name}</span>
+                        <span className="text-[11px] text-neutral-500 truncate">{m.desc}</span></span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {mode === "image" && (
               <div>
                 <label className="text-sm font-medium mb-2 block">Reference image</label>
@@ -312,17 +339,18 @@ export default function Generator() {
               <div data-testid={queued ? "image-queue-notice" : "image-loading"}>
                 <LogoLoader
                   label={queued ? "Your image is in the queue..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
-                  sublabel={queued ? "Luchii is finishing another image. Yours starts next." : "Powered by Frasberg"}
+                  sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "Powered by Frasberg"}
                 />
               </div>
             ) : image ? (
               <>
                 <img data-testid="result-image" src={image} alt="Generated" className="w-full h-full object-contain" />
+                <LuchiiBadge overlay model={resultModel} testId="result-luchii-badge" />
                 {upscaling && (
                   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
                     <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>
                       <LogoLoader label={queued ? "Your upscale is in the queue..." : "Enhancing to 4K..."}
-                        sublabel={queued ? "Luchii is finishing another image. Yours starts next." : "AI detail re-render"} />
+                        sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "AI detail re-render"} />
                     </div>
                   </div>
                 )}
@@ -335,10 +363,10 @@ export default function Generator() {
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Share2 className="w-4 h-4" /> Share
                   </button>
-                  <a href={image} download="luchii-ai.png"
+                  <button onClick={() => downloadWithLuchii(image, "frasberg-creator.png", resultModel)} data-testid="result-download-btn"
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Download className="w-4 h-4" /> Download
-                  </a>
+                  </button>
                 </div>
               </>
             ) : (
@@ -354,7 +382,7 @@ export default function Generator() {
               <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
               <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                 {history.map((h, i) => (
-                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); }}
+                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); }}
                     className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
                     <img src={h.url} alt="" className="w-full h-full object-cover" />
                   </button>

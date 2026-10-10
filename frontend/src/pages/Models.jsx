@@ -18,7 +18,7 @@ export default function Models() {
       toast("Coming soon", { description: `${m.name} is on the way. Stay tuned!` });
       return;
     }
-    navigate(m.route || `/create?mode=${m.mode || "text"}`);
+    navigate(m.route || `/create?mode=${m.mode || "text"}${m.name.startsWith("Luchii") ? `&model=${encodeURIComponent(m.name)}` : ""}`);
   };
 
   const families = modelFamilies
@@ -37,10 +37,10 @@ export default function Models() {
           <Sparkles className="w-3.5 h-3.5 text-[#00F0FF]" /> One workflow, every model
         </span>
         <h1 className="font-display font-bold tracking-tight text-4xl md:text-6xl mt-6 max-w-4xl mx-auto">
-          The models behind <span className="text-[#00F0FF]">Luchii</span>
+          The models behind <span className="text-[#00F0FF]">Frasberg Creator</span>
         </h1>
         <p className="mt-5 text-neutral-400 text-lg max-w-2xl mx-auto">
-          Every Luchii tool and model is powered by Frasberg — image, video,
+          Every Frasberg Creator tool and model is powered by Frasberg — image, video,
           voice, music and 3D, all from a single interface.
         </p>
       </section>
@@ -67,7 +67,8 @@ export default function Models() {
       {families.map((fam) => (
         <section key={fam.id} className="max-w-[1400px] mx-auto px-5 md:px-8 py-12 md:py-16">
           <div className="max-w-3xl mb-8">
-            <h2 className="font-display font-bold tracking-tight text-2xl md:text-4xl">
+            <h2 className="font-display font-bold tracking-tight text-2xl md:text-4xl flex items-center gap-3">
+              {fam.logo && <img src={fam.logo} alt="Luchii logo" data-testid={`family-logo-${fam.id}`} className="w-10 h-10 md:w-12 md:h-12 rounded-full object-contain" />}
               {fam.label}
             </h2>
             <p className="mt-3 text-neutral-400 text-base md:text-lg">{fam.blurb}</p>
@@ -103,7 +104,10 @@ export default function Models() {
                 </div>
 
                 <div className="p-5 flex flex-col flex-1">
-                  <h3 className="font-display font-semibold text-lg">{m.name}</h3>
+                  <h3 className="font-display font-semibold text-lg flex items-center gap-2">
+                    {fam.logo && <img src={fam.logo} alt="Luchii logo" className="w-6 h-6 rounded-full object-contain" />}
+                    {m.name}
+                  </h3>
                   <p className="mt-1.5 text-sm text-neutral-400 flex-1">{m.desc}</p>
                   <div className="flex flex-wrap gap-1.5 mt-4">
                     {m.caps.map((c) => (

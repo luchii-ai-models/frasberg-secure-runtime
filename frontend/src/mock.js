@@ -1,15 +1,18 @@
-// Mock data for Luchii — replaced by backend where noted in contracts.md
+// Mock data for Frasberg Creator — replaced by backend where noted in contracts.md
 
 export const brand = {
-  name: "Luchii",
-  logo: "/luchii-logo.png",
+  name: "Frasberg Creator",
+  logo: "/frasberg-emblem.png",
+  luchiiLogo: "/luchii-logo.png",
 };
 
 export const navLinks = [
   { label: "Create", href: "/create" },
   { label: "Tools", href: "#tools" },
+  { label: "Agent", href: "/agent" },
   { label: "Models", href: "/models" },
   { label: "API", href: "/developers" },
+  { label: "Luchii Code", href: "/about-luchii", luchii: true },
 ];
 
 export const heroPills = [
@@ -86,7 +89,7 @@ export const tools = [
   { title: "3D Studio", desc: "Generate 3D objects and assets from a prompt", route: "/3d" },
   { title: "Spaces Builder", desc: "Build interactive 3D worlds and scenes", route: "/spaces" },
   { title: "Change Camera Angle", desc: "Reframe any shot from a new angle", mode: "image", preset: "Reframe this shot from a new camera angle while keeping the same subject and scene" },
-  { title: "All tools", desc: "Explore the full Luchii toolset", mode: "text" },
+  { title: "All tools", desc: "Explore the full Frasberg Creator toolset", mode: "text" },
 ];
 
 export const useCases = [
@@ -97,9 +100,9 @@ export const useCases = [
 ];
 
 export const testimonials = [
-  { quote: "Best-in-class models and workflow tools through a single unified interface. Luchii has been a key unlock as we've woven AI into our workflows, end to end.", name: "Nick Coronges", role: "CTO at R/GA" },
-  { quote: "We are highly satisfied with Luchii. It consistently delivers high-quality, reliable results while streamlining workflows and enhancing efficiency.", name: "Javier Romero", role: "Global Head of Content" },
-  { quote: "Luchii is a key part of our marketing stack. It helps us create high-quality content at scale as we expand our AI-native platform.", name: "Juan Urdiales", role: "Co-Founder & Co-CEO" },
+  { quote: "Best-in-class models and workflow tools through a single unified interface. Frasberg Creator has been a key unlock as we've woven AI into our workflows, end to end.", name: "Nick Coronges", role: "CTO at R/GA" },
+  { quote: "We are highly satisfied with Frasberg Creator. It consistently delivers high-quality, reliable results while streamlining workflows and enhancing efficiency.", name: "Javier Romero", role: "Global Head of Content" },
+  { quote: "Frasberg Creator is a key part of our marketing stack. It helps us create high-quality content at scale as we expand our AI-native platform.", name: "Juan Urdiales", role: "Co-Founder & Co-CEO" },
 ];
 
 export const pricing = [
@@ -109,16 +112,16 @@ export const pricing = [
 ];
 
 export const faqs = [
-  { q: "What is Luchii?", a: "Luchii is a full creative platform for images — generate, remix (image-to-image), and upscale, all powered by Frasberg." },
-  { q: "What powers Luchii?", a: "Every Luchii tool and model is powered by Frasberg — image, video, voice, music and 3D, all in one place." },
+  { q: "What is Frasberg Creator?", a: "Frasberg Creator is a full creative platform for images — generate, remix (image-to-image), and upscale, all powered by Frasberg." },
+  { q: "What powers Frasberg Creator?", a: "Every Frasberg Creator tool and model is powered by Frasberg — image, video, voice, music and 3D, all in one place." },
   { q: "Who owns the content I create?", a: "You do. Everything you generate belongs to you, and it comes with a full commercial AI license." },
-  { q: "Can I use Luchii for commercial work?", a: "Yes. The content you generate includes a full commercial license so you can use it in real projects." },
+  { q: "Can I use Frasberg Creator for commercial work?", a: "Yes. The content you generate includes a full commercial license so you can use it in real projects." },
 ];
 
 export const footerCols = [
   { title: "Product", links: ["Audio", "3D", "Spaces", "Image", "Video", "API"] },
   { title: "Tools", links: ["Image Generator", "Upscaler", "Background Remover", "Photo Editor", "Text to Speech"] },
-  { title: "Company", links: ["About", "Careers", "Blog", "Originals", "Contact"] },
+  { title: "Company", links: ["Luchii Code", "About", "Careers", "Blog", "Originals", "Contact"] },
   { title: "Resources", links: ["Help center", "Enterprise", "Community", "Status"] },
 ];
 
@@ -153,13 +156,17 @@ export const modelFamilies = [
   {
     id: "luchii",
     label: "Luchii Models",
-    blurb: "The Luchii studio family — expressive creativity with effortless control.",
+    logo: "/luchii-logo.png",
+    blurb: "The Luchii studio family by Frasberg, Inc. — expressive creativity with effortless control.",
     models: [
       { name: "Luchii Nova-Muse", tag: "Creative", desc: "Top-quality, versatile generation across any subject or style.", caps: ["Text to Image"], mode: "text", img: "https://images.unsplash.com/photo-1636690581110-a512fed05fd3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHw0fHxBSSUyMGFydHxlbnwwfHx8fDE3ODY0NTA5OTZ8MA&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Painter-X", tag: "Editing", desc: "Remix any reference photo — restyle, reframe, and transform.", caps: ["Image to Image"], mode: "image", img: "https://images.pexels.com/photos/8108327/pexels-photo-8108327.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940" },
       { name: "Luchii Prime", tag: "Enhance", desc: "AI enhancement re-render for crisp, high-resolution 4K detail.", caps: ["Upscale"], mode: "image", img: "https://images.unsplash.com/photo-1620121692029-d088224ddc74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwyfHwzRCUyMGFic3RyYWN0fGVufDB8fHx8MTc4NjQ1MTAwMnww&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Dreamline", tag: "Artistic", desc: "Expressive, painterly styles and bold, vivid color.", caps: ["Text to Image"], mode: "text", img: "https://images.unsplash.com/photo-1568038479111-87bf80659645?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwzfHxjaW5lbWF0aWMlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODYyNzY4NTF8MA&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Vision", tag: "Concept", desc: "Concept art and stylized worlds with striking composition.", caps: ["Text to Image"], mode: "text", img: "https://images.pexels.com/photos/29433729/pexels-photo-29433729.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940" },
+      { name: "Luchii Cinematica", tag: "Video", desc: "Text-to-video with cinematic camera moves, lighting and motion.", caps: ["Video"], route: "/video", img: "https://images.unsplash.com/photo-1508364654111-570ff4726d27?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=940" },
+      { name: "Luchii Animus", tag: "Photo Motion", desc: "Bring any photo to life: hair in wind, orbits, zooms and more.", caps: ["Image to Video"], route: "/video", img: "https://images.unsplash.com/photo-1633382148761-d56d55cee3cd?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=940" },
+      { name: "Luchii Harmonia", tag: "Music", desc: "Original songs and beats in any genre, from a single prompt.", caps: ["Audio"], route: "/audio", img: "https://images.unsplash.com/photo-1574882225022-9e0e447e9662?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=940" },
       { name: "Luchii Sculpt 3D", tag: "3D", desc: "Prompt-to-3D meshes you can spin, inspect and download as .glb.", caps: ["3D"], route: "/3d", img: "https://images.unsplash.com/photo-1634834300387-8015d9fb7550?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwyfHxmdXR1cmlzdGljJTIwM0R8ZW58MHx8fHwxNzg2NDgxNjQ2fDA&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Vocalist Prime", tag: "Audio", desc: "Natural text-to-speech in a range of expressive voices.", caps: ["Audio"], route: "/tts", img: "https://images.unsplash.com/photo-1631727498498-5dd093268aea?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwzfHxmdXR1cmlzdGljJTIwY3JlYXRpdmV8ZW58MHx8fHwxNzg2Mjc2ODUyfDA&ixlib=rb-4.1.0&q=85" },
     ],

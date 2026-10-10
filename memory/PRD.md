@@ -20,7 +20,7 @@ Import and clone an exact copy of luchii-ai.com (tools, files, database, feature
 ## Backlog
 - P0: Get Frasberg image and voice endpoints healthy. Grant text_to_speech permission to the keys.
 - P1: Speech to Speech, 3D Studio, Spaces Builder (still "Soon").
-- P2: Frasberg chat (luchii-6-plus) assistant inside the app.
+- P2: (dropped by the user) in-app chat assistant.
 
 ## Update (2026-10)
 - In-house Luchii engines are used when a Frasberg-keyed call fails: Piper voices (TTS/STS), faster-whisper base (STT), SD-Turbo on CPU (generate/edit/upscale). Models are stored in LUCHII_MODELS_DIR and preloaded at startup.
@@ -98,3 +98,20 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - Honest UI: a "Preview mode" banner shows when no GPU is online, and Lite clips are labelled "Preview · animated stills" (studio, gallery, share page). The engine defaults to Motion Free and auto-selects an online engine.
 - Tests: iteration_11 passed 37/37 backend plus all frontend checks.
 - Preview-only admin test account: admin.tester@luchiiapp.com is in ADMIN_EMAILS in backend/.env.
+
+## Update (2026-06, re-import)
+- Re-imported luchii-ai-models/frasberg-secure-runtime. Recreated backend/.env with the 8 user frb_live keys + FRASBERG_KEY_ROUTES, installed deps + ffmpeg, re-created admin.tester / motion.tester accounts. Smoke tests passed (iteration_12).
+- /status GPU panel polling now pauses when the tab is hidden.
+- P2 in-app chat assistant was built, then REMOVED at the user's request (it is not wanted in the app). Do not re-add it.
+- 2026-06: Rebranded the platform from "Luchii" to "Frasberg Creator" (nav, hero, footer, auth, legal, studios, share pages, title, toasts) with the FA Frasberg emblem as logo + favicon. "Luchii" now only names the Frasberg AI models and intelligence (Luchii Models, Luchii Prime, Vision, etc.). Internal storage keys (luchii_token) unchanged.
+- 2026-06: Luchii logo restored for Luchii Models (Models page family header + each Luchii model card, API docs note). "Made with Luchii" restored (home featured, share page, 3D share). Footer copyright: "© 2003-2026, Frasberg, Inc. or its affiliates". Legal states Frasberg.com / Frasberg, Inc. own and operate Luchii AI Models and all Luchii products and systems. luchii-ai.com stays.
+- 2026-06: Luchii badge (components/LuchiiBadge.jsx) on all creations: create result, gallery image + video cards, image share /s/:id, video share /v/:id, video & music studio results. New /about-luchii page (logo, 5 pillars, model family, CTAs), linked from footer "About Luchii". Tests: iteration_13 100%.
+- 2026-06: "About Luchii" nav link with Luchii logo (desktop + mobile). Badges now name the model: Nova-Muse (default), Dreamline (anime/digital-art), Vision (3d), Painter-X (remix), Prime (upscale), Luchii Video, Luchii Audio (components/LuchiiBadge.jsx luchiiModelFor). Downloads carry the Luchii mark: images via canvas (lib/luchiiMark.js), videos via GET /api/media/{id}/download (ffmpeg overlay, cached in GridFS marked_file_id). /api/share/{id} returns kind. Tests: iteration_14 100%.
+- 2026-06: Named Luchii video/music models: Luchii Cinematica (text-to-video), Luchii Animus (photo-to-video), Luchii Harmonia (music) — shown on all badges and as cards on /models. Gallery Images and Videos tabs have a Luchii model filter (chips, only shown when 2+ models present). Tests: iteration_15 100%.
+- 2026-06: Nav/footer "About Luchii" renamed "Luchii Code" (still /about-luchii).
+- 2026-06: Luchii Chat BACKEND ONLY (for other Frasberg platforms — no chat UI on this creator site, user explicit): GET /api/chat/models (proxy Frasberg /v1/models, chat-capable), GET/DELETE /api/chat/conversations[/id], POST /api/chat/send (SSE stream proxy to Frasberg /v1/chat, model switch, session continuity, db.chat_conversations), POST/GET /api/chat/agents/tasks (agents dispatch image/video/music creator jobs, db.agent_tasks). Auth: user JWT or X-Frasberg-Key (frb_live key). Upstream luchii chat currently replies "turbulence".
+- 2026-06: Luchii model picker on /create (Nova-Muse / Dreamline / Vision for text, Painter-X for remix); model sent to /api/generate (prompt hint, stored on generation), shown on badges; /models "Try" preselects. Tests: iteration_16 100%.
+
+## Update (2026-10, conflict branch merged)
+- Re-imported luchii-ai-models/frasberg-secure-runtime. Branch `conflict_091026_2226` had unrelated history (squashed re-import of main@00fd644 + assistant). Grafted it onto main@00fd644 and 3-way merged: clean, no file conflicts. Result = main + all conflict-branch work (Agent bundle /api/chat/agents/bundle, Luchii Cinematica/Animus/Harmonia model selection, 429 retry, VideoModelPicker, ChatDocs, LuchiiAgent page, Luchii Code/Chat backend, badges/marks). Temp PR template removed.
+- Recreated backend/.env (8 frb_live keys + FRASBERG_KEY_ROUTES) and frontend/.env, installed deps + ffmpeg, seeded test accounts.

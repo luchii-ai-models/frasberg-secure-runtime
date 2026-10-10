@@ -98,3 +98,16 @@ credentials.json
 backend/models/openvoice/converter/checkpoint.pth
 frontend/node_modules/.cache/default-development/0.pack
 frontend/node_modules/.cache/default-development/2.pack
+
+luchii-models/
+frontend/node_modules/.cache/default-development/4.pack
+frontend/node_modules/.cache/default-development/5.pack
+frontend/node_modules/.cache/default-development/6.pack
+frontend/node_modules/.cache/default-development/7.pack
+frontend/node_modules/.cache/default-development/8.pack
+frontend/node_modules/.cache/default-development/10.pack
+frontend/node_modules/.cache/default-development/11.pack
+frontend/node_modules/.cache/default-development/12.pack
+luchii-models/hf/models--stabilityai--sd-turbo/blobs/67e013543d4fac905c882e2993d86a2d454ee69dc9e8f37c0c23d33a48959d15
+luchii-models/hf/models--stabilityai--sd-turbo/blobs/2aa1f43011b553a4cba7f37456465cdbd48aab7b54b9348b890e8058ea7683ec
+luchii-models/hf/models--stabilityai--sd-turbo/blobs/438da6db739c8651ec4152341b8133d6896db452ea27afdb6b9b0344f0c40532

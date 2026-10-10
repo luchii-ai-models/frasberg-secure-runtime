@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 17: Verified Agent-From-Creator (bundle) backend+UI, Luchii Chat API docs on /developers (login-gated), video model picker (Auto/Cinematica/Animus) and removal of engine cards/preview-mode/fallback-note from /video. 8/8 backend pytest cases pass. All frontend assertions pass. Known external behavior: Frasberg image endpoint is currently queue-throttling (returns 'Frasberg Creator is finishing another image. Yours is in the queue.'), so the image task of a UI-triggered bundle immediately transitions to Failed; subsequent video task starts correctly (sequential bundle); music task waits as designed. Not a backend bug - this is upstream throttling surfaced via _run_agent_task error path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_agents_bundle.py", "/app/test_reports/pytest/iter17.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "luchii_media_model() is a clean mapper: honors requested name (Cinematica/Animus/Harmonia) and otherwise auto-picks Animus when start image is present on video, Cinematica otherwise, Harmonia for music. Both /api/video POST and /api/videos listing propagate luchii_model, verified by pytest.",
+    "chat_owner() correctly enforces 401 when neither JWT nor FRASBERG_KEYS platform key is supplied; agent_bundle_status 404 for cross-owner access confirmed via pytest with two separate users.",
+    "_run_bundle runs image -> video -> music sequentially and uses _wait_job to gate the next step on completion/failure of the previous media job. Image task is marked 'dispatched' after generate() returns synchronously, so the bundle moves on even if a downstream artifact lookup (/api/share/{id}) 404s; consider marking status='completed' on dispatch for image, since 'dispatched' is terminal for image in the UI (TaskCard treats image 'done' when the share image loads).",
+    "LuchiiAgent polling uses 5s interval and considers image terminal on status 'dispatched' or 'failed'; works correctly in UI.",
+    "VideoModelPicker correctly flips aria-pressed on selection and the auto-note updates dynamically with hasImage. Toast + fileRef.current?.click() on Animus-without-image is a nice guided UX.",
+    "ChatDocs lists all 9 chat/agent endpoints with correct method+path and renders base URL from REACT_APP_BACKEND_URL; curl/JS examples use the same env var (no hardcoded host)."
+  ],
+  "updated_files": ["/app/backend/tests/test_agents_bundle.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "motion.tester@luchiiapp.com / Motion123! and admin.tester@luchiiapp.com / Admin123!",
+  "seed_data_creation": "Pytest created 3 TEST_bundle video jobs and 1 UI bundle (3 agent_tasks + 3 jobs). All TEST_bundle rows deleted from db.jobs (6) and db.agent_tasks (6) at end of run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Agent bundle UI triggers image first; upstream Frasberg image generation is currently queue-throttled so image usually surfaces 'Failed' with 'Frasberg Creator is finishing another image. Yours is in the queue.' then the video task starts. For deterministic verification of bundle completeness, prefer backend pytest over waiting for the UI. Pytest file: /app/backend/tests/test_agents_bundle.py.",
+  "rca of the issue": "No code issues. The Image-task 'Failed' observed in the UI run is caused by Frasberg upstream image endpoint returning a queue/throttle error at that moment, which _run_agent_task correctly captures and persists via status='failed'. The sequential _run_bundle then proceeds to the video task. No fix needed; retrying later or increasing retry/backoff on generate() would improve UX but is a product decision."
+}

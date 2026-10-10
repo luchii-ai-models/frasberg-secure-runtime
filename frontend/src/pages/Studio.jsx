@@ -5,6 +5,8 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import Navbar from "../components/Navbar";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
+import { VideoModelPicker } from "../components/VideoModelPicker";
 import Footer from "../components/Footer";
 import LogoLoader from "../components/LogoLoader";
 import { PresetRow } from "../components/PresetRow";
@@ -19,8 +21,8 @@ const PRESETS = { video: VIDEO_PRESETS, music: MUSIC_PRESETS };
 
 const KINDS = {
   video: {
-    icon: Clapperboard, badge: "Frasberg Motion · Video Creator", title: "Turn prompts into", accent: "cinematic video",
-    sub: "Describe a scene or drop in a photo to animate it. Pick a Frasberg Motion engine, a look, a format and a length.",
+    icon: Clapperboard, badge: "AI Video", title: "Turn prompts into", accent: "cinematic video",
+    sub: "Describe a scene or drop in a photo to animate it. Pick a Luchii model, a look, a format and a length.",
     durations: [3, 5, 8], defaultDuration: 5, eta: (d) => `about ${Math.round(d * 0.6 + 1)}–${Math.round(d * 1.2 + 2)} min`,
     placeholder: "A red fox running through a snowy forest at dawn...",
     styles: [["cinematic", "Cinematic"], ["photoreal", "Photoreal"], ["anime", "Anime"], ["3d", "3D Animation"], ["noir", "Film Noir"], ["fantasy", "Fantasy"]],
@@ -83,35 +85,6 @@ async function toJpegDataUrl(file, max = 1280) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function EnginePicker({ engines, value, onChange }) {
-  if (!engines.length) return null;
-  return (
-    <div>
-      <label className="text-sm font-medium text-neutral-300 mb-2 block">Engine</label>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {engines.map((e) => {
-          const Ico = ENGINE_ICONS[e.tier] || Zap;
-          const on = e.status === "online";
-          const sel = value === e.id;
-          return (
-            <button key={e.id} type="button" data-testid={`video-engine-${e.id}`} onClick={() => onChange(e.id)}
-              className={`text-left rounded-xl border p-3 transition-colors ${sel ? "border-[#00F0FF] bg-[#00F0FF]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold"><Ico className="w-3.5 h-3.5 text-[#00F0FF]" />{e.name.replace("Frasberg ", "")}</span>
-                <span data-testid={`video-engine-status-${e.id}`} title={on ? `${e.workers_online} GPU worker(s) online` : "No GPU worker online"}
-                  className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${on ? "text-emerald-400" : "text-neutral-500"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${on ? "bg-emerald-400" : "bg-neutral-600"}`} />{on ? (e.warm ? "warm" : "online") : "offline"}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-snug text-neutral-400">{e.blurb}</p>
-              <p className="mt-1 text-[10px] text-neutral-500">{e.resolution} · {fmtEta(e.eta_seconds)}</p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function Progress({ kind, job, eta }) {
   const queued = job.status === "queued";
@@ -140,6 +113,7 @@ export default function Studio({ kind }) {
   const [engine, setEngine] = useState(params.get("engine") || "frasberg-motion-free");
   const [aspect, setAspect] = useState("16:9");
   const [startImage, setStartImage] = useState(null);
+  const [vmodel, setVmodel] = useState("auto");
 
   useEffect(() => () => clearInterval(timer.current), []);
   useEffect(() => {
@@ -152,7 +126,9 @@ export default function Studio({ kind }) {
         setEngines(vids);
         // No engine requested in the URL: jump to the first engine that can render real motion right now.
         if (!params.get("engine")) {
-          setEngine((cur) => (vids.find((e) => e.id === cur)?.status === "online" ? cur : (vids.find((e) => e.status === "online") || {}).id || cur));
+          const best = ["frasberg-motion-ultra", "frasberg-motion-pro", "frasberg-motion-fast", "frasberg-motion-free"]
+            .find((id) => vids.find((e) => e.id === id)?.status === "online");
+          setEngine(best || "frasberg-motion-free");
         }
       }).catch(() => {});
     load();
@@ -160,7 +136,6 @@ export default function Studio({ kind }) {
     return () => { alive = false; clearInterval(t); };
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const anyGpuOnline = engines.some((e) => e.status === "online");
   const current = engines.find((e) => e.id === engine);
   const gpuLive = current?.status === "online";
   const durations = kind === "video" && gpuLive && current.durations?.length ? current.durations : cfg.durations;
@@ -196,11 +171,17 @@ export default function Studio({ kind }) {
 
   const start = async () => {
     if (!prompt.trim()) { toast.error("Please enter a prompt."); return; }
+    if (kind === "video" && vmodel === "Luchii Animus" && !startImage) {
+      toast.error("Luchii Animus animates a photo. Add a start image first.");
+      fileRef.current?.click();
+      return;
+    }
     setBusy(true);
     setJob(null);
     try {
       const body = kind === "video"
-        ? { prompt: prompt.trim(), duration, style, model: engine, aspect_ratio: aspect, image_base64: startImage }
+        ? { prompt: prompt.trim(), duration, style, model: engine, aspect_ratio: aspect,
+          image_base64: vmodel === "Luchii Cinematica" ? null : startImage, luchii_model: vmodel === "auto" ? null : vmodel }
         : { prompt: prompt.trim(), duration, style };
       const { data } = await axios.post(`${API}/${kind}`, body, { headers: authHeader });
       setJob(data);
@@ -268,20 +249,7 @@ export default function Studio({ kind }) {
             <PresetRow presets={PRESETS[kind]} testid={`${kind}-preset`}
               onPick={(p) => { setPrompt(p.prompt); if (p.style) setStyle(p.style); }} />
           )}
-          {kind === "video" && <EnginePicker engines={engines} value={engine} onChange={setEngine} />}
-          {kind === "video" && current && !gpuLive && anyGpuOnline && (
-            <p className="-mt-2 text-[11px] text-neutral-500" data-testid="video-engine-fallback-note">
-              {current.name} is offline right now. Your clip will go to the next online Frasberg Motion engine.
-            </p>
-          )}
-          {kind === "video" && engines.length > 0 && !anyGpuOnline && (
-            <div className="-mt-1 flex gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3 text-xs text-amber-100/90" data-testid="video-preview-mode-banner">
-              <Info className="w-4 h-4 shrink-0 text-amber-300 mt-0.5" />
-              <span><b className="text-amber-200">Preview mode:</b> no Frasberg Motion GPU is online right now, so clips render as
-                <b> animated stills</b> (camera moves over AI keyframes, not real motion){startImage ? " and your start photo isn't used" : ""}.
-                Real motion switches on automatically when a Frasberg GPU comes online.</span>
-            </div>
-          )}
+          {kind === "video" && <VideoModelPicker value={vmodel} onChange={setVmodel} hasImage={!!startImage} />}
           {kind === "video" && (
             <div>
               <label className="text-sm font-medium text-neutral-300 mb-2 block">Format</label>
@@ -310,15 +278,16 @@ export default function Studio({ kind }) {
               {kind === "video"
                 ? <video src={src} controls autoPlay loop playsInline className={`rounded-xl border border-white/10 ${aspect === "9:16" ? "max-h-[70vh] mx-auto" : "w-full"}`} />
                 : <audio src={src} controls autoPlay className="w-full" />}
+              <LuchiiBadge model={luchiiModelFor(kind, null, job.mode, job.luchii_model)} testId={`${kind}-luchii-badge`} />
               {kind === "video" && isPreviewEngine(job.engine) && (
                 <span data-testid="video-preview-badge" className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-200">
                   <Info className="w-3 h-3" /> Preview · animated stills
                 </span>
               )}
               <p className="text-xs text-neutral-500" data-testid={`${kind}-result-meta`}>
-                “{job.prompt}” · {job.style || "no style"} · {job.duration}s{job.engine ? ` · ${job.engine}` : ""}{job.mode === "image-to-video" ? " · image-to-video" : ""}
+                “{job.prompt}” · {job.style || "no style"} · {job.duration}s{job.mode === "image-to-video" ? " · image-to-video" : ""}
               </p>
-              <a href={src} download={`luchii-${kind}-${job.job_id.slice(0, 8)}.${kind === "video" ? "mp4" : "wav"}`}
+              <a href={src.includes("/api/media/") ? `${src}/download` : src} download={`luchii-${kind}-${job.job_id.slice(0, 8)}.${kind === "video" ? "mp4" : "wav"}`}
                 data-testid={`${kind}-download-btn`}
                 className="flex items-center justify-center w-full h-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-sm">
                 <Download className="w-4 h-4 mr-2" /> Download

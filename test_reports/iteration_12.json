@@ -1,0 +1,26 @@
+{
+  "summary": "Verified PRD backlog after fresh pod import. Backend: 7/7 pytest passed in /app/backend/tests/test_assistant_chat.py — admin+motion login, /api/gpu-admin/overview (admin 200 with workers/jobs/engines keys, motion 403), POST /api/assistant/chat validation (empty '' -> 422, missing message -> 422), and the live Frasberg luchii-6-plus proxy call returning HTTP 503 with detail 'Luchii Chat (Frasberg) is replying with a turbulence error' after cycling all 8 keys (~23s). Frontend: all 8 routes load 200 with the floating assistant-open-btn mounted (/, /create, /video, /audio, /3d, /sts, /gallery, /models). Assistant widget flow verified end-to-end: open-btn -> assistant-panel appears, assistant-input accepts text, assistant-send-btn sends, assistant-msg-user bubble renders, assistant-loading spinner shows while the request runs, then assistant-msg-error bubble renders with the exact backend detail 'Luchii Chat (Frasberg) is replying with a turbulence error'; assistant-close-btn collapses the panel back to the floating button. Admin JWT login (admin.tester) through the auth dialog works and /status renders gpu-panel + gpu-summary + gpu-engines + gpu-workers + gpu-no-workers; Luchii Chat engine card is Degraded with 'Replies with turbulence error'. motion.tester receives 403 from /api/gpu-admin/overview (confirmed from both pytest and in-page fetch). Heavy generation flows were intentionally not exercised (CPU pod).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_assistant_chat.py",
+    "/app/test_reports/pytest/assistant_chat.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py assistant_chat: FRASBERG_KEY_ROUTES has no 'chat' key, so key_order('chat') iterates all 8 keys sequentially. With upstream currently in turbulence this means each client wait is ~15-25s. Consider short-circuiting after N=2 keys for chat (or add 'chat:<prefix>' to KEY_ROUTES) to reduce user-visible latency on the floating widget.",
+    "server.py assistant_chat parses the SSE stream with a regex over r.text; if the upstream later streams genuinely (chunked), buffering the full body before parsing can delay first-token UX. Consider httpx streaming + incremental parse once Frasberg chat is stable.",
+    "AssistantChat.jsx: the loader is rendered inside the message list but not scrolled into view, and there's no auto-scroll to bottom when new messages arrive. On long conversations the user won't see new bubbles. Add a ref + scrollIntoView on msgs change.",
+    "AssistantChat.jsx: the error bubble text is the raw backend detail. For the turbulence case ('Luchii Chat (Frasberg) is replying with a turbulence error') it's acceptable, but a generic HTTP error from upstream could leak internal phrasing to end users. Consider mapping 5xx details to a friendly message with a Retry button."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_assistant_chat.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (8 routes, assistant flow, admin /status, motion 403)"},
+  "test_credentials": "admin.tester@luchiiapp.com / Admin123! · motion.tester@luchiiapp.com / Motion123!",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Assistant chat regression lives in /app/backend/tests/test_assistant_chat.py. The 503-turbulence assertion is tied to the current Frasberg upstream state; once Frasberg luchii-6-plus starts replying normally that test will flip to expecting 200 with {reply, session_id, engine:'luchii-6-plus'} — update test_chat_returns_503_turbulence accordingly. Do NOT pip install requirements-gpu.txt in /root/.venv and do NOT trigger heavy image/video/3d/music jobs on this CPU pod.",
+  "rca of the issue": "N/A - all requested features behave as specified in the review request."
+}

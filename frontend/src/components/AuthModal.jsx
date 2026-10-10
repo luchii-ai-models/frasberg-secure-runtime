@@ -26,7 +26,7 @@ export default function AuthModal({ open, onOpenChange, defaultMode = "login" })
     try {
       if (mode === "register") {
         await register(name, email, password);
-        toast.success("Welcome to Luchii!");
+        toast.success("Welcome to Frasberg Creator!");
       } else {
         await login(email, password);
         toast.success("Welcome back!");
@@ -45,13 +45,13 @@ export default function AuthModal({ open, onOpenChange, defaultMode = "login" })
       <DialogContent className="bg-[#1E2327] border-white/10 text-white sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-1">
-            <img src={brand.logo} alt="Luchii logo" className="w-9 h-9 rounded-full object-contain" />
-            <span className="font-display text-lg font-bold">Luchii</span>
+            <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
+            <span className="font-display text-lg font-bold">Frasberg Creator</span>
           </div>
           <DialogTitle className="font-display text-2xl">
             {mode === "register" ? "Create your account" : "Welcome back"}
           </DialogTitle>
-          <DialogDescription className="sr-only">Log in or create your Luchii account</DialogDescription>
+          <DialogDescription className="sr-only">Log in or create your Frasberg Creator account</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-4 mt-2">
@@ -82,7 +82,7 @@ export default function AuthModal({ open, onOpenChange, defaultMode = "login" })
         </form>
 
         <p className="text-sm text-neutral-400 text-center mt-2">
-          {mode === "register" ? "Already have an account?" : "New to Luchii?"}{" "}
+          {mode === "register" ? "Already have an account?" : "New to Frasberg Creator?"}{" "}
           <button data-testid="auth-toggle-mode-btn"
             onClick={() => setMode(mode === "register" ? "login" : "register")}
             className="text-[#00F0FF] hover:underline font-medium"

@@ -163,13 +163,13 @@ export default function Studio3D() {
       <Navbar />
       <main className="max-w-[1200px] mx-auto px-5 md:px-8 pt-28 pb-24" data-testid="studio-3d-page">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 mb-5">
-          <Box className="w-3.5 h-3.5 text-[#00F0FF]" /> Luchii 3D Studio · Powered by Frasberg
+          <Box className="w-3.5 h-3.5 text-[#00F0FF]" /> Frasberg Creator 3D Studio · Powered by Frasberg
         </div>
         <h1 className="font-display font-bold tracking-tight text-4xl sm:text-5xl lg:text-6xl">
           Turn a prompt or photo into a <span className="text-[#00F0FF]">3D model</span>
         </h1>
         <p className="mt-3 text-neutral-400 text-sm md:text-base max-w-2xl">
-          Describe a single object or upload a photo of one. Luchii sculpts a coloured mesh you can spin, share and download as .glb for games, AR and 3D apps.
+          Describe a single object or upload a photo of one. Frasberg Creator sculpts a coloured mesh you can spin, share and download as .glb for games, AR and 3D apps.
         </p>
 
         <ModeToggle mode={mode} setMode={setMode} />
