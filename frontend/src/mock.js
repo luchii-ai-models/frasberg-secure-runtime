@@ -126,14 +126,14 @@ export const footerCols = [
 ];
 
 export const showcase = [
-  { title: "Chrome Dream", style: "3D Render", img: "https://images.unsplash.com/photo-1677080865283-26f94ed332f1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHw0fHxmdXR1cmlzdGljJTIwM0R8ZW58MHx8fHwxNzg2NDgxNjQ2fDA&ixlib=rb-4.1.0&q=85", prompt: "Liquid chrome sculpture, studio lighting, octane render, ultra detailed" },
-  { title: "Stardust", style: "Cosmic", img: "https://images.unsplash.com/photo-1711560705654-325ba859c38b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHw0fHxjb3NtaWMlMjBuZWJ1bGF8ZW58MHx8fHwxNzg2NDgxNjQ2fDA&ixlib=rb-4.1.0&q=85", prompt: "Vast cosmic nebula in cyan and violet, deep-space photography" },
-  { title: "Neon Muse", style: "Fashion", img: "https://images.pexels.com/photos/8107913/pexels-photo-8107913.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", prompt: "Neon-lit fashion editorial portrait, magenta and cyan rim light" },
-  { title: "Golden Hour", style: "Photoreal", img: "https://images.unsplash.com/photo-1568038479111-87bf80659645?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwzfHxjaW5lbWF0aWMlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODY0ODE2NDV8MA&ixlib=rb-4.1.0&q=85", prompt: "Cinematic portrait in warm dusk light, shallow depth of field" },
-  { title: "Hyperform", style: "3D Render", img: "https://images.unsplash.com/photo-1634834300387-8015d9fb7550?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwyfHxmdXR1cmlzdGljJTIwM0R8ZW58MHx8fHwxNzg2NDgxNjQ2fDA&ixlib=rb-4.1.0&q=85", prompt: "Abstract futuristic form, glossy materials, physically based render" },
-  { title: "Nebula Drift", style: "Cosmic", img: "https://images.unsplash.com/photo-1679615845580-8691c78fd7d3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwyfHxjb3NtaWMlMjBuZWJ1bGF8ZW58MHx8fHwxNzg2NDgxNjQ2fDA&ixlib=rb-4.1.0&q=85", prompt: "Swirling nebula clouds with glowing stars, ultra high detail" },
-  { title: "Lost Valley", style: "Surreal", img: "https://images.pexels.com/photos/10109585/pexels-photo-10109585.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", prompt: "Dreamlike fantasy valley at golden hour, epic scale, painterly" },
-  { title: "Deep Current", style: "Abstract", img: "https://images.unsplash.com/photo-1620121692029-d088224ddc74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMDNEfGVufDB8fHx8MTc4NjQ4MTY1Mnww&ixlib=rb-4.1.0&q=85", prompt: "Organic flowing 3D shapes in deep blue and violet, octane render" },
+  { title: "Chrome Dream", style: "3D Render", img: "/showcase/chrome-dream.jpg", prompt: "Liquid chrome sculpture, studio lighting, octane render, ultra detailed" },
+  { title: "Stardust", style: "Cosmic", img: "/showcase/stardust.jpg", prompt: "Vast cosmic nebula in cyan and violet, deep-space photography" },
+  { title: "Neon Muse", style: "Fashion", img: "/showcase/neon-muse.jpg", prompt: "Neon-lit fashion editorial portrait, magenta and cyan rim light" },
+  { title: "Golden Hour", style: "Photoreal", img: "/showcase/golden-hour.jpg", prompt: "Cinematic portrait in warm dusk light, shallow depth of field" },
+  { title: "Hyperform", style: "3D Render", img: "/showcase/hyperform.jpg", prompt: "Abstract futuristic form, glossy materials, physically based render" },
+  { title: "Nebula Drift", style: "Cosmic", img: "/showcase/nebula-drift.jpg", prompt: "Swirling nebula clouds with glowing stars, ultra high detail" },
+  { title: "Lost Valley", style: "Surreal", img: "/showcase/lost-valley.jpg", prompt: "Dreamlike fantasy valley at golden hour, epic scale, painterly" },
+  { title: "Deep Current", style: "Abstract", img: "/showcase/deep-current.jpg", prompt: "Organic flowing 3D shapes in deep blue and violet, octane render" },
 ];
 
 export const modelFamilies = [

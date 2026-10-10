@@ -56,10 +56,11 @@ STYLE_HINTS = {
     "product": "luxury product photography, seamless studio backdrop, softbox lighting, crisp reflections, commercial advertising shot",
 }
 LUCHII_IMAGE_MODELS = {
-    "Luchii Nova-Muse": "",
+    "Luchii Nova-Muse": "RAW photo, ultra realistic, natural skin texture, sharp focus, 85mm lens, soft film grain",
     "Luchii Dreamline": "expressive painterly brushwork, bold vivid color, dreamy artistic atmosphere",
     "Luchii Vision": "striking concept art, stylized world-building, dramatic cinematic composition",
 }
+PHOTO_MODELS = {"Luchii Nova-Muse"}  # rendered by the photoreal engine (local_engines.generate_photo)
 UPSCALE_PRESET = "Enhance and upscale this image to crisp 4K detail, preserving the original composition and colors"
 
 app = FastAPI()
@@ -314,8 +315,9 @@ async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_use
     full = f"{body.prompt}. {hint}. Aspect ratio {body.aspect_ratio}." if hint else body.prompt
     img, engine = await gpu_image(full, body.aspect_ratio), "frasberg-image"
     if not img:
+        local_fn = local_engines.generate_photo if model in PHOTO_MODELS else local_engines.generate_image
         img, engine = await image_with_fallback({"prompt": full, "style": body.style, "aspect_ratio": body.aspect_ratio},
-                                                local_engines.generate_image, full, body.aspect_ratio)
+                                                local_fn, f"{body.prompt}, {hint}" if hint else body.prompt, body.aspect_ratio)
     doc = await save_generation("generate", body.prompt, img, body.session_id, user, body.style, body.aspect_ratio, model)
     return {"id": doc["id"], "kind": "generate", "image_base64": img, "prompt": body.prompt, "style": body.style,
             "model": model, "engine": engine}
@@ -335,6 +337,72 @@ async def upscale(body: UpscaleIn, user: Optional[dict] = Depends(optional_user)
                                             local_engines.upscale_image, body.image_base64)
     doc = await save_generation("upscale", body.prompt or "Upscaled", img, body.session_id, user, "Upscale 4K")
     return {"id": doc["id"], "kind": "upscale", "model": "Luchii Prime", "image_base64": img, "prompt": body.prompt, "engine": engine}
+
+
+# ---------- image jobs (async; photoreal renders take ~2 min, longer than the ingress timeout) ----------
+IMAGE_JOB_STALE_S = 20 * 60
+
+
+async def _run_image_job(jid: str, fn, body, user: Optional[dict]):
+    for attempt in range(150):
+        try:
+            await db.image_jobs.update_one({"id": jid}, {"$set": {"status": "running", "updated_at": now_iso()}})
+            res = await fn(body, user)
+            break
+        except HTTPException as e:
+            if e.status_code == 429 and attempt < 149:
+                await db.image_jobs.update_one({"id": jid}, {"$set": {"status": "queued", "updated_at": now_iso()}})
+                await asyncio.sleep(8)
+                continue
+            await db.image_jobs.update_one({"id": jid}, {"$set": {"status": "failed", "error": str(e.detail), "updated_at": now_iso()}})
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Image job %s failed", jid)
+            await db.image_jobs.update_one({"id": jid}, {"$set": {"status": "failed", "error": e.__class__.__name__, "updated_at": now_iso()}})
+            return
+    res.pop("image_base64", None)
+    await db.image_jobs.update_one({"id": jid}, {"$set": {"status": "completed", "result": res, "updated_at": now_iso()}})
+
+
+async def _start_image_job(kind: str, fn, body, user: Optional[dict]) -> dict:
+    job = {"id": str(uuid.uuid4()), "kind": kind, "status": "queued", "result": None, "error": None,
+           "model": getattr(body, "model", None), "user_id": user["id"] if user else None,
+           "created_at": now_iso(), "updated_at": now_iso()}
+    await db.image_jobs.insert_one(job.copy())
+    asyncio.create_task(_run_image_job(job["id"], fn, body, user))
+    return {"job_id": job["id"], "status": "queued", "kind": kind}
+
+
+@api.post("/generate/jobs")
+async def generate_job(body: GenerateIn, user: Optional[dict] = Depends(optional_user)):
+    return await _start_image_job("generate", generate, body, user)
+
+
+@api.post("/edit/jobs")
+async def edit_job(body: EditIn, user: Optional[dict] = Depends(optional_user)):
+    return await _start_image_job("edit", edit, body, user)
+
+
+@api.post("/upscale/jobs")
+async def upscale_job(body: UpscaleIn, user: Optional[dict] = Depends(optional_user)):
+    return await _start_image_job("upscale", upscale, body, user)
+
+
+@api.get("/image-jobs/{job_id}")
+async def image_job_status(job_id: str):
+    job = await db.image_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Image job not found")
+    if job["status"] in ("queued", "running"):
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(job["updated_at"])).total_seconds()
+        if age > IMAGE_JOB_STALE_S:
+            job["status"], job["error"] = "failed", "Interrupted by a server restart. Please try again."
+            await db.image_jobs.update_one({"id": job_id}, {"$set": {"status": "failed", "error": job["error"]}})
+    out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "error": job.get("error"), "model": job.get("model")}
+    if job["status"] == "completed" and job.get("result"):
+        gen = await db.generations.find_one({"id": job["result"]["id"]}, {"_id": 0, "image_base64": 1})
+        out["result"] = {**job["result"], "image_base64": (gen or {}).get("image_base64")}
+    return out
 
 
 @api.post("/tts")

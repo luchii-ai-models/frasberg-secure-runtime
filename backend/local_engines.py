@@ -36,12 +36,24 @@ PIPER_VOICES = {
     "sage": "en_US-hfc_female-medium", "coral": "en_GB-jenny_dioco-medium", "ash": "en_US-hfc_male-medium",
 }
 IMAGE_MODEL = "stabilityai/sd-turbo"
+# Photoreal engine (Luchii Nova-Muse): Realistic Vision V6 + LCM-LoRA, 4 steps. Weights live on the
+# persistent volume (LUCHII_PHOTO_MODELS_DIR) so they survive pod restarts.
+PHOTO_MODELS_DIR = Path(os.environ["LUCHII_PHOTO_MODELS_DIR"])
+PHOTO_REPO = "SG161222/Realistic_Vision_V6.0_B1_noVAE"
+PHOTO_FILE = "Realistic_Vision_V6.0_NV_B1_fp16.safetensors"
+PHOTO_VAE = "stabilityai/sd-vae-ft-mse"
+PHOTO_LCM = "latent-consistency/lcm-lora-sdv1-5"
+PHOTO_STEPS = 4
+PHOTO_NEGATIVE = ("nsfw, nude, deformed face, distorted, disfigured, blurry, cartoon, painting, lowres, "
+                  "bad anatomy, extra fingers, watermark, text")
+PHOTO_ASPECTS = {"1:1": (512, 512), "16:9": (704, 384), "9:16": (384, 704), "4:3": (576, 448), "3:4": (512, 640)}
 ASPECTS = {"1:1": (512, 512), "16:9": (640, 384), "9:16": (384, 640), "4:3": (576, 448), "3:4": (448, 576)}
 
 _voices: dict = {}
 _whisper = None
 _t2i = None
 _i2i = None
+_photo = None
 _voice_lock = threading.Lock()
 _image_lock = threading.Lock()
 _stt_lock = threading.Lock()
@@ -57,11 +69,14 @@ _heavy_lock = threading.RLock()
 
 
 def _claim(keep: str):
-    global _t2i, _i2i, _shape, _shape_i2m, _music
+    global _t2i, _i2i, _shape, _shape_i2m, _music, _photo
     freed = []
     if keep != "image" and _t2i is not None:
         _t2i = _i2i = None
         freed.append("image")
+    if keep != "photo" and _photo is not None:
+        _photo = None
+        freed.append("photo")
     if keep != "shape" and (_shape is not None or _shape_i2m is not None):
         _shape = _shape_i2m = None
         freed.append("shape")
@@ -143,11 +158,12 @@ def _pipes():
         import torch
         from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoencoderTiny
         torch.set_num_threads(cpu_threads())
-        _t2i = AutoPipelineForText2Image.from_pretrained(IMAGE_MODEL, torch_dtype=torch.float32,
-                                                         cache_dir=str(MODELS_DIR / "hf"))
+        # fp16 weights (half the download/disk) on the persistent volume, upcast to fp32 for CPU.
+        _t2i = AutoPipelineForText2Image.from_pretrained(IMAGE_MODEL, variant="fp16", torch_dtype=torch.float32,
+                                                         cache_dir=str(PHOTO_MODELS_DIR))
         # TAESD tiny VAE: ~2x faster decode on CPU vs the full VAE, negligible quality loss.
         _t2i.vae = AutoencoderTiny.from_pretrained("madebyollin/taesd", torch_dtype=torch.float32,
-                                                   cache_dir=str(MODELS_DIR / "hf"))
+                                                   cache_dir=str(PHOTO_MODELS_DIR))
         _t2i.unet = _t2i.unet.to(memory_format=torch.channels_last)
         _t2i.set_progress_bar_config(disable=True)
         _i2i = AutoPipelineForImage2Image.from_pipe(_t2i)
@@ -224,13 +240,49 @@ def upscale_image(image_b64: str) -> str:
     return edit_image("high resolution, sharp fine detail, crisp, best quality", image_b64, strength=0.3, longest=768)
 
 
+def _photo_pipe():
+    global _photo
+    if _photo is None:
+        import torch
+        from huggingface_hub import snapshot_download
+        from diffusers import AutoencoderKL, LCMScheduler, StableDiffusionPipeline
+        torch.set_num_threads(cpu_threads())
+        cache = str(PHOTO_MODELS_DIR)
+        rv = snapshot_download(PHOTO_REPO, cache_dir=cache, allow_patterns=[
+            PHOTO_FILE, "model_index.json", "scheduler/*", "tokenizer/*", "text_encoder/config.json",
+            "unet/config.json", "vae/config.json", "feature_extractor/*"])
+        vae = AutoencoderKL.from_pretrained(snapshot_download(PHOTO_VAE, cache_dir=cache, allow_patterns=[
+            "config.json", "diffusion_pytorch_model.safetensors"]), torch_dtype=torch.float32)
+        pipe = StableDiffusionPipeline.from_single_file(f"{rv}/{PHOTO_FILE}", config=rv, vae=vae, torch_dtype=torch.float32,
+                                                        safety_checker=None, requires_safety_checker=False)
+        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+        pipe.load_lora_weights(snapshot_download(PHOTO_LCM, cache_dir=cache))
+        pipe.fuse_lora()
+        pipe.unet = pipe.unet.to(memory_format=torch.channels_last)
+        pipe.set_progress_bar_config(disable=True)
+        _photo = pipe
+        logger.info("Luchii photoreal engine (Nova-Muse) loaded")
+    return _photo
+
+
+def generate_photo(prompt: str, aspect: Optional[str] = "1:1") -> str:
+    """Photoreal render (Luchii Nova-Muse). ~2 min on this 2-core CPU, so callers run it as a job."""
+    w, h = PHOTO_ASPECTS.get(aspect or "1:1", PHOTO_ASPECTS["1:1"])
+    with _heavy_lock, _image_lock:
+        _claim("photo")
+        pipe = _photo_pipe()
+        img = pipe(prompt=prompt, negative_prompt=PHOTO_NEGATIVE, num_inference_steps=PHOTO_STEPS,
+                   guidance_scale=1.0, width=w, height=h).images[0]
+    return _to_data_url(img)
+
+
 def image_busy() -> bool:
     return _image_lock.locked()
 
 
 def status() -> dict:
     voice_ready = any((MODELS_DIR / "piper").glob("*.onnx")) if (MODELS_DIR / "piper").exists() else False
-    image_ready = (MODELS_DIR / "hf").exists() and any((MODELS_DIR / "hf").rglob("*.safetensors"))
+    image_ready = any(PHOTO_MODELS_DIR.glob("models--stabilityai--sd-turbo/snapshots/*/unet/*.safetensors"))
     shape_ready = (SCRATCH_MODELS_DIR / "hf").exists() and any((SCRATCH_MODELS_DIR / "hf").rglob("*.bin"))
     return {"voice_downloaded": voice_ready, "image_downloaded": image_ready, "image_loaded": _t2i is not None,
             "shape_downloaded": shape_ready, "shape_loaded": _shape is not None, "converter_loaded": _converter is not None}

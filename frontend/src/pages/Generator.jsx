@@ -29,14 +29,24 @@ function getSessionId() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function postQueued(url, body, headers, onQueued) {
+// Image work runs as a server job (photoreal renders take ~2 min) and is polled until done.
+async function runImageJob(path, body, headers, onQueued) {
+  const { data } = await axios.post(`${API}${path}/jobs`, body, { headers });
   for (;;) {
+    await sleep(2500);
+    let s;
     try {
-      return await axios.post(url, body, { headers });
+      s = (await axios.get(`${API}/image-jobs/${data.job_id}`)).data;
     } catch (e) {
-      if (e?.response?.status !== 429) throw e;
-      onQueued(true);
-      await sleep((Number(e.response.headers?.["retry-after"]) || 8) * 1000);
+      if (e?.response?.status === 404) throw e;
+      continue; // transient network/gateway hiccup: keep polling
+    }
+    onQueued(s.status === "queued");
+    if (s.status === "completed") return { data: s.result };
+    if (s.status === "failed") {
+      const err = new Error(s.error || "Generation failed");
+      err.response = { data: { detail: s.error || "Generation failed. Please try again." } };
+      throw err;
     }
   }
 }
@@ -133,10 +143,10 @@ export default function Generator() {
     try {
       let res;
       if (mode === "image") {
-        res = await postQueued(`${API}/edit`,
+        res = await runImageJob("/edit",
           { prompt, image_base64: refImage, session_id: getSessionId() }, authHeader, markQueued);
       } else {
-        res = await postQueued(`${API}/generate`,
+        res = await runImageJob("/generate",
           { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId() }, authHeader, markQueued);
       }
       const url = res.data.image_base64;
@@ -158,7 +168,7 @@ export default function Generator() {
     if (!image) return;
     setUpscaling(true);
     try {
-      const res = await postQueued(`${API}/upscale`,
+      const res = await runImageJob("/upscale",
         { image_base64: image, session_id: getSessionId(), prompt: prompt || "Upscaled" }, authHeader, markQueued);
       const url = res.data.image_base64;
       setImage(url);
@@ -339,7 +349,8 @@ export default function Generator() {
               <div data-testid={queued ? "image-queue-notice" : "image-loading"}>
                 <LogoLoader
                   label={queued ? "Your image is in the queue..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
-                  sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "Powered by Frasberg"}
+                  sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next."
+                    : mode === "text" && pickModel === "Luchii Nova-Muse" ? "Luchii Nova-Muse photoreal render · about 2 minutes" : "Powered by Frasberg"}
                 />
               </div>
             ) : image ? (
