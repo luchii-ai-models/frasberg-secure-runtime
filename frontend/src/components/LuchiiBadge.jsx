@@ -4,9 +4,9 @@ import { brand } from "../mock";
 const IMAGE_MODELS = { edit: "Luchii Painter-X", upscale: "Luchii Prime" };
 const STYLE_MODELS = { anime: "Luchii Dreamline", "digital-art": "Luchii Dreamline", "3d": "Luchii Vision" };
 
-export const luchiiModelFor = (kind, style) =>
-  kind === "video" ? "Luchii Video"
-    : kind === "music" ? "Luchii Audio"
+export const luchiiModelFor = (kind, style, mode) =>
+  kind === "video" ? (mode === "image-to-video" ? "Luchii Animus" : "Luchii Cinematica")
+    : kind === "music" ? "Luchii Harmonia"
     : IMAGE_MODELS[kind] || STYLE_MODELS[style] || "Luchii Nova-Muse";
 
 export const LuchiiBadge = ({ model, overlay = false, className = "", testId = "luchii-badge" }) => (

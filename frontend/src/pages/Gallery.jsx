@@ -83,7 +83,7 @@ function VideoCard({ v }) {
         <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
           className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
-        <LuchiiBadge overlay model="Luchii Video" className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
+        <LuchiiBadge overlay model={luchiiModelFor("video", null, v.mode)} className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
@@ -107,12 +107,43 @@ function VideoCard({ v }) {
   );
 }
 
+function ModelFilter({ options, value, onChange }) {
+  if (options.length < 2) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mb-5" data-testid="gallery-model-filter">
+      {["All", ...options].map((m) => (
+        <button key={m} onClick={() => onChange(m)} data-testid={`gallery-model-filter-${m.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+          className={`inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 text-xs border transition-colors ${value === m
+            ? "bg-[#00F0FF]/15 border-[#00F0FF]/60 text-white" : "border-white/10 bg-white/5 text-neutral-400 hover:text-white"}`}>
+          {m === "All" ? <span className="w-5 h-5 grid place-items-center">·</span> : <img src={brand.luchiiLogo} alt="" className="w-5 h-5 rounded-full object-contain" />}
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const useModelFilter = (list, modelOf) => {
+  const [model, setModel] = useState("All");
+  const options = useMemo(() => [...new Set(list.map(modelOf))].sort(), [list]); // eslint-disable-line
+  const active = options.includes(model) ? model : "All";
+  const shown = active === "All" ? list : list.filter((x) => modelOf(x) === active);
+  return { model: active, setModel, options, shown };
+};
+
+const videoModel = (v) => luchiiModelFor("video", null, v.mode);
+const imageModel = (g) => luchiiModelFor(g.kind, g.style);
+
 function VideosList({ videos }) {
+  const f = useModelFilter(videos, videoModel);
   if (!videos.length) return <Empty text="No Frasberg Motion clips yet." to="/video" cta="Open Video Creator" />;
   return (
+    <>
+    <ModelFilter options={f.options} value={f.model} onChange={f.setModel} />
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start" data-testid="gallery-videos">
-      {videos.map((v) => <VideoCard key={v.id} v={v} />)}
+      {f.shown.map((v) => <VideoCard key={v.id} v={v} />)}
     </div>
+    </>
   );
 }
 
@@ -144,6 +175,7 @@ export default function Gallery() {
   const [takes, setTakes] = useState([]);
   const [models, setModels] = useState([]);
   const [videos, setVideos] = useState([]);
+  const imgFilter = useModelFilter(items, imageModel);
 
   useEffect(() => {
     if (loading) return;
@@ -219,11 +251,13 @@ export default function Gallery() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((g) => (
+          <>
+          <ModelFilter options={imgFilter.options} value={imgFilter.model} onChange={imgFilter.setModel} />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" data-testid="gallery-images">
+            {imgFilter.shown.map((g) => (
               <div key={g.id} className="group relative rounded-xl overflow-hidden border border-white/10 bg-[#1E2327]">
                 <img src={g.image_base64} alt={g.prompt} className="w-full aspect-square object-cover" />
-                <LuchiiBadge overlay model={luchiiModelFor(g.kind, g.style)} className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
+                <LuchiiBadge overlay model={imageModel(g)} className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="absolute bottom-0 inset-x-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="text-xs text-neutral-200 line-clamp-2">{g.prompt}</p>
@@ -248,6 +282,7 @@ export default function Gallery() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
     </div>

@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import Navbar from "../components/Navbar";
-import { LuchiiBadge } from "../components/LuchiiBadge";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
 import Footer from "../components/Footer";
 import LogoLoader from "../components/LogoLoader";
 import { PresetRow } from "../components/PresetRow";
@@ -311,7 +311,7 @@ export default function Studio({ kind }) {
               {kind === "video"
                 ? <video src={src} controls autoPlay loop playsInline className={`rounded-xl border border-white/10 ${aspect === "9:16" ? "max-h-[70vh] mx-auto" : "w-full"}`} />
                 : <audio src={src} controls autoPlay className="w-full" />}
-              <LuchiiBadge model={kind === "video" ? "Luchii Video" : "Luchii Audio"} testId={`${kind}-luchii-badge`} />
+              <LuchiiBadge model={luchiiModelFor(kind, null, job.mode)} testId={`${kind}-luchii-badge`} />
               {kind === "video" && isPreviewEngine(job.engine) && (
                 <span data-testid="video-preview-badge" className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-200">
                   <Info className="w-3 h-3" /> Preview · animated stills

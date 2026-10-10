@@ -3,7 +3,7 @@ import axios from "axios";
 import { Link, useParams } from "react-router-dom";
 import { Clapperboard, Download, Share2, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import Navbar from "../components/Navbar";
-import { LuchiiBadge } from "../components/LuchiiBadge";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
 import Footer from "../components/Footer";
 import { shareVideo, isPreviewEngine } from "./Studio";
 
@@ -46,7 +46,7 @@ export default function VideoShare() {
           {error ? <p className="text-neutral-500" data-testid="video-share-error">{error}</p>
             : !video ? <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF]" />
             : <video ref={ref} data-testid="video-share-player" src={src} controls autoPlay loop muted playsInline className="w-full h-full object-contain" />}
-          {video && !error && <LuchiiBadge overlay model="Luchii Video" className="!top-3 !right-3 !bottom-auto" testId="video-share-luchii-badge" />}
+          {video && !error && <LuchiiBadge overlay model={luchiiModelFor("video", null, video.mode)} className="!top-3 !right-3 !bottom-auto" testId="video-share-luchii-badge" />}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3 justify-center">
