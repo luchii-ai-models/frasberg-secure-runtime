@@ -76,6 +76,9 @@ export default function Generator() {
   const [resultModel, setResultModel] = useState("Luchii Nova-Muse");
   const [pickModel, setPickModel] = useState(() => LUCHII_PICKER.text.some((m) => m.name === searchParams.get("model")) ? searchParams.get("model") : "Luchii Nova-Muse");
   const [history, setHistory] = useState([]);
+  const [draftMode, setDraftMode] = useState(true); // Nova-Muse quick preview (<1 min) before the full render
+  const [lastDraft, setLastDraft] = useState(null); // {prompt, style, aspect_ratio, model, seed} of the shown draft
+  const [renderingFull, setRenderingFull] = useState(false);
 
   // Apply tool preset from URL (?mode=text|image&preset=...)
   useEffect(() => {
@@ -129,6 +132,37 @@ export default function Generator() {
     reader.readAsDataURL(file);
   };
 
+  const isNova = mode === "text" && pickModel === "Luchii Nova-Muse";
+
+  const showResult = (res, usedPrompt) => {
+    const url = res.data.image_base64;
+    setImage(url);
+    setResultId(res.data.id);
+    const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
+    setResultModel(model);
+    setHistory((h) => [{ id: res.data.id, url, prompt: usedPrompt, model }, ...h].slice(0, 8));
+    setLastDraft(res.data.quality === "draft" ? {
+      prompt: res.data.prompt, style: res.data.style, aspect_ratio: res.data.aspect_ratio, model: res.data.model, seed: res.data.seed,
+    } : null);
+  };
+
+  const handleFullRender = async () => {
+    if (!lastDraft) return;
+    setRenderingFull(true);
+    setLoading(true);
+    try {
+      const res = await runImageJob("/generate", { ...lastDraft, quality: "full", session_id: getSessionId() }, authHeader, markQueued);
+      showResult(res, lastDraft.prompt);
+      toast.success("Full-quality render ready!");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Full render failed. Please try again.");
+    } finally {
+      setLoading(false);
+      setRenderingFull(false);
+      setQueued(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a prompt.");
@@ -147,14 +181,10 @@ export default function Generator() {
           { prompt, image_base64: refImage, session_id: getSessionId() }, authHeader, markQueued);
       } else {
         res = await runImageJob("/generate",
-          { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId() }, authHeader, markQueued);
+          { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId(),
+            ...(isNova ? { quality: draftMode ? "draft" : "full" } : {}) }, authHeader, markQueued);
       }
-      const url = res.data.image_base64;
-      setImage(url);
-      setResultId(res.data.id);
-      const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
-      setResultModel(model);
-      setHistory((h) => [{ id: res.data.id, url, prompt, model }, ...h].slice(0, 8));
+      showResult(res, prompt);
       toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
@@ -174,6 +204,7 @@ export default function Generator() {
       setImage(url);
       setResultId(res.data.id);
       setResultModel("Luchii Prime");
+      setLastDraft(null);
       setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K", model: "Luchii Prime" }, ...h].slice(0, 8));
       toast.success("Enhanced & upscaled (AI 4K re-render)!");
     } catch (e) {
@@ -291,10 +322,27 @@ export default function Generator() {
               </div>
               <Textarea data-testid="prompt-input" value={prompt} onChange={(e) => setPrompt(e.target.value)}
                 placeholder={mode === "image"
-                  ? "turn this into a watercolor painting..."
+                  ? "make it a snowy winter night..."
                   : "A cinematic portrait of an astronaut in neon rain..."}
                 className="min-h-28 resize-none bg-black/40 border-white/10 focus-visible:ring-[#00F0FF]" />
             </div>
+
+            {mode === "image" && (
+              <p data-testid="painterx-hint" className="text-[11px] text-neutral-500 -mt-3">
+                Painter-X follows plain edit commands, like "make it snowy" or "turn day into night", and keeps your layout.
+              </p>
+            )}
+
+            {isNova && (
+              <label data-testid="draft-toggle" className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 cursor-pointer">
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold">Quick draft</span>
+                  <span className="block text-[11px] text-neutral-500">Preview in under a minute, then render full quality</span>
+                </span>
+                <input type="checkbox" data-testid="draft-toggle-input" checked={draftMode} onChange={(e) => setDraftMode(e.target.checked)}
+                  className="w-4 h-4 accent-[#00F0FF] shrink-0" />
+              </label>
+            )}
 
             {mode === "text" && (
               <>
@@ -348,15 +396,27 @@ export default function Generator() {
             {loading ? (
               <div data-testid={queued ? "image-queue-notice" : "image-loading"}>
                 <LogoLoader
-                  label={queued ? "Your image is in the queue..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
+                  label={queued ? "Your image is in the queue..." : renderingFull ? "Rendering full quality..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
                   sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next."
-                    : mode === "text" && pickModel === "Luchii Nova-Muse" ? "Luchii Nova-Muse photoreal render · about 2 minutes" : "Powered by Frasberg"}
+                    : renderingFull ? "Luchii Nova-Muse full photoreal render · about 2 minutes"
+                    : mode === "image" ? "Luchii Painter-X is applying your edit · about 3 minutes"
+                    : isNova ? (draftMode ? "Luchii Nova-Muse quick draft · under a minute" : "Luchii Nova-Muse photoreal render · about 2 minutes")
+                    : "Powered by Frasberg"}
                 />
               </div>
             ) : image ? (
               <>
                 <img data-testid="result-image" src={image} alt="Generated" className="w-full h-full object-contain" />
                 <LuchiiBadge overlay model={resultModel} testId="result-luchii-badge" />
+                {lastDraft && (
+                  <div className="absolute top-4 left-4 flex items-center gap-2">
+                    <span data-testid="draft-badge" className="rounded-full bg-black/70 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">DRAFT</span>
+                    <button data-testid="render-full-btn" onClick={handleFullRender} disabled={loading}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-3.5 py-1.5 text-xs font-semibold hover:bg-[#00d4de] disabled:opacity-60">
+                      <Wand2 className="w-3.5 h-3.5" /> Render full quality
+                    </button>
+                  </div>
+                )}
                 {upscaling && (
                   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
                     <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>
@@ -393,7 +453,7 @@ export default function Generator() {
               <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
               <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                 {history.map((h, i) => (
-                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); }}
+                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); setLastDraft(null); }}
                     className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
                     <img src={h.url} alt="" className="w-full h-full object-cover" />
                   </button>

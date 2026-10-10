@@ -44,6 +44,7 @@ PHOTO_FILE = "Realistic_Vision_V6.0_NV_B1_fp16.safetensors"
 PHOTO_VAE = "stabilityai/sd-vae-ft-mse"
 PHOTO_LCM = "latent-consistency/lcm-lora-sdv1-5"
 PHOTO_STEPS = 4
+PHOTO_DRAFT_STEPS = 3
 PHOTO_NEGATIVE = ("nsfw, nude, deformed face, distorted, disfigured, blurry, cartoon, painting, lowres, "
                   "bad anatomy, extra fingers, watermark, text")
 PHOTO_ASPECTS = {"1:1": (512, 512), "16:9": (704, 384), "9:16": (384, 704), "4:3": (576, 448), "3:4": (512, 640)}
@@ -54,6 +55,7 @@ _whisper = None
 _t2i = None
 _i2i = None
 _photo = None
+_ip2p = None
 _voice_lock = threading.Lock()
 _image_lock = threading.Lock()
 _stt_lock = threading.Lock()
@@ -69,7 +71,7 @@ _heavy_lock = threading.RLock()
 
 
 def _claim(keep: str):
-    global _t2i, _i2i, _shape, _shape_i2m, _music, _photo
+    global _t2i, _i2i, _shape, _shape_i2m, _music, _photo, _ip2p
     freed = []
     if keep != "image" and _t2i is not None:
         _t2i = _i2i = None
@@ -77,6 +79,9 @@ def _claim(keep: str):
     if keep != "photo" and _photo is not None:
         _photo = None
         freed.append("photo")
+    if keep != "edit" and _ip2p is not None:
+        _ip2p = None
+        freed.append("edit")
     if keep != "shape" and (_shape is not None or _shape_i2m is not None):
         _shape = _shape_i2m = None
         freed.append("shape")
@@ -236,6 +241,44 @@ def edit_image(prompt: str, image_b64: str, strength: float = 0.6, longest: int 
     return _to_data_url(img)
 
 
+# ---------- Painter-X: instruction-based editing (InstructPix2Pix) ----------
+EDIT_MODEL = "timbrooks/instruct-pix2pix"
+EDIT_STEPS = 8
+
+
+def _ip2p_pipe():
+    global _ip2p
+    if _ip2p is None:
+        import torch
+        from huggingface_hub import snapshot_download
+        from diffusers import EulerAncestralDiscreteScheduler, StableDiffusionInstructPix2PixPipeline
+        torch.set_num_threads(cpu_threads())
+        path = snapshot_download(EDIT_MODEL, cache_dir=str(SCRATCH_MODELS_DIR / "hf"), allow_patterns=[
+            "model_index.json", "scheduler/*", "tokenizer/*", "feature_extractor/*", "text_encoder/config.json",
+            "text_encoder/model.fp16.safetensors", "unet/config.json", "unet/diffusion_pytorch_model.fp16.safetensors",
+            "vae/config.json", "vae/diffusion_pytorch_model.fp16.safetensors"])
+        pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(path, variant="fp16", torch_dtype=torch.float32,
+                                                                      safety_checker=None, requires_safety_checker=False)
+        pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+        pipe.unet = pipe.unet.to(memory_format=torch.channels_last)
+        pipe.set_progress_bar_config(disable=True)
+        _ip2p = pipe
+        logger.info("Luchii Painter-X edit engine loaded")
+    return _ip2p
+
+
+def instruct_edit(instruction: str, image_b64: str, longest: int = 512) -> str:
+    """Follows plain-language edit commands ("make it snowy", "turn day into night") while keeping the
+    original layout. ~2.5 min on this 2-core CPU, so callers run it as a job."""
+    src = _load_image(image_b64, longest)
+    with _heavy_lock, _image_lock:
+        _claim("edit")
+        pipe = _ip2p_pipe()
+        img = pipe(instruction, image=src, num_inference_steps=EDIT_STEPS, guidance_scale=7.0,
+                   image_guidance_scale=1.5).images[0]
+    return _to_data_url(img)
+
+
 def upscale_image(image_b64: str) -> str:
     return edit_image("high resolution, sharp fine detail, crisp, best quality", image_b64, strength=0.3, longest=768)
 
@@ -265,14 +308,19 @@ def _photo_pipe():
     return _photo
 
 
-def generate_photo(prompt: str, aspect: Optional[str] = "1:1") -> str:
-    """Photoreal render (Luchii Nova-Muse). ~2 min on this 2-core CPU, so callers run it as a job."""
+def generate_photo(prompt: str, aspect: Optional[str] = "1:1", draft: bool = False, seed: Optional[int] = None) -> str:
+    """Photoreal render (Luchii Nova-Muse). Full: 4 steps, ~2 min on this 2-core CPU. Draft: 3/4 size and
+    3 steps, under a minute. The same seed keeps the draft and full render close in composition."""
+    import torch
     w, h = PHOTO_ASPECTS.get(aspect or "1:1", PHOTO_ASPECTS["1:1"])
+    if draft:
+        w, h = (max(256, int(d * 0.75) // 64 * 64) for d in (w, h))
     with _heavy_lock, _image_lock:
         _claim("photo")
         pipe = _photo_pipe()
-        img = pipe(prompt=prompt, negative_prompt=PHOTO_NEGATIVE, num_inference_steps=PHOTO_STEPS,
-                   guidance_scale=1.0, width=w, height=h).images[0]
+        gen = torch.Generator().manual_seed(int(seed)) if seed is not None else None
+        img = pipe(prompt=prompt, negative_prompt=PHOTO_NEGATIVE, num_inference_steps=PHOTO_DRAFT_STEPS if draft else PHOTO_STEPS,
+                   guidance_scale=1.0, width=w, height=h, generator=gen).images[0]
     return _to_data_url(img)
 
 

@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import re
 import time
 import uuid
@@ -48,11 +49,11 @@ def key_order(feature: Optional[str]) -> list:
     return first + [i for i in range(len(FRASBERG_KEYS)) if i not in first]
 
 STYLE_HINTS = {
-    "cinematic": "cinematic film still, anamorphic lens, dramatic rim lighting, teal and cyan color grade, volumetric light, shallow depth of field, 8k, masterpiece",
+    "cinematic": "cinematic film still, anamorphic lens, dramatic lighting, rich color grade, volumetric light, shallow depth of field, 8k, masterpiece",
     "photorealistic": "photorealistic, ultra detailed, natural soft light, 85mm lens, sharp focus, high dynamic range, award-winning photography",
-    "3d": "3D render, octane render, glossy physically based materials, studio lighting, cyan and violet accents, ultra detailed",
+    "3d": "3D render, octane render, glossy physically based materials, studio lighting, ultra detailed",
     "anime": "anime key visual, vibrant cel shading, clean line art, luminous colors, detailed background, studio quality",
-    "digital-art": "digital art, highly detailed concept illustration, vivid cyan and violet palette, glowing highlights, trending on artstation",
+    "digital-art": "digital art, highly detailed concept illustration, vivid colors, glowing highlights, trending on artstation",
     "product": "luxury product photography, seamless studio backdrop, softbox lighting, crisp reflections, commercial advertising shot",
 }
 LUCHII_IMAGE_MODELS = {
@@ -61,6 +62,7 @@ LUCHII_IMAGE_MODELS = {
     "Luchii Vision": "striking concept art, stylized world-building, dramatic cinematic composition",
 }
 PHOTO_MODELS = {"Luchii Nova-Muse"}  # rendered by the photoreal engine (local_engines.generate_photo)
+PERSON_WORDS = re.compile(r"\b(portrait|woman|women|man|men|girl|boy|person|people|model|face|selfie|lady|guy)s?\b", re.I)
 UPSCALE_PRESET = "Enhance and upscale this image to crisp 4K detail, preserving the original composition and colors"
 
 app = FastAPI()
@@ -247,6 +249,8 @@ class GenerateIn(BaseModel):
     aspect_ratio: Optional[str] = "1:1"
     session_id: Optional[str] = None
     model: Optional[str] = None
+    quality: Optional[str] = None  # "draft" (Nova-Muse quick preview) or "full"
+    seed: Optional[int] = None
 
 
 class EditIn(BaseModel):
@@ -311,22 +315,31 @@ async def me(user: dict = Depends(current_user)):
 @api.post("/generate")
 async def generate(body: GenerateIn, user: Optional[dict] = Depends(optional_user)):
     model = body.model if body.model in LUCHII_IMAGE_MODELS else None
+    draft = body.quality == "draft" and model in PHOTO_MODELS
+    seed = body.seed if body.seed is not None else random.randint(0, 2**31 - 1)
     hint = ", ".join(h for h in (LUCHII_IMAGE_MODELS.get(model or ""), STYLE_HINTS.get(body.style or "", "")) if h)
     full = f"{body.prompt}. {hint}. Aspect ratio {body.aspect_ratio}." if hint else body.prompt
     img, engine = await gpu_image(full, body.aspect_ratio), "frasberg-image"
     if not img:
-        local_fn = local_engines.generate_photo if model in PHOTO_MODELS else local_engines.generate_image
+        local_prompt = f"{body.prompt}, {hint}" if hint else body.prompt
+        if model in PHOTO_MODELS:
+            if PERSON_WORDS.search(body.prompt):  # cfg 1.0 ignores negative prompts, so steer people toward clothing
+                local_prompt = f"{body.prompt}, wearing a stylish outfit, {hint}"
+            local_fn, args = local_engines.generate_photo, (local_prompt, body.aspect_ratio, draft, seed)
+        else:
+            local_fn, args = local_engines.generate_image, (local_prompt, body.aspect_ratio)
         img, engine = await image_with_fallback({"prompt": full, "style": body.style, "aspect_ratio": body.aspect_ratio},
-                                                local_fn, f"{body.prompt}, {hint}" if hint else body.prompt, body.aspect_ratio)
+                                                local_fn, *args)
     doc = await save_generation("generate", body.prompt, img, body.session_id, user, body.style, body.aspect_ratio, model)
     return {"id": doc["id"], "kind": "generate", "image_base64": img, "prompt": body.prompt, "style": body.style,
-            "model": model, "engine": engine}
+            "model": model, "engine": engine, "quality": "draft" if draft else "full", "seed": seed,
+            "aspect_ratio": body.aspect_ratio}
 
 
 @api.post("/edit")
 async def edit(body: EditIn, user: Optional[dict] = Depends(optional_user)):
     img, engine = await image_with_fallback({"prompt": body.prompt, "image_base64": strip_data_url(body.image_base64)},
-                                            local_engines.edit_image, body.prompt, body.image_base64)
+                                            local_engines.instruct_edit, body.prompt, body.image_base64)
     doc = await save_generation("edit", body.prompt, img, body.session_id, user, "Remix")
     return {"id": doc["id"], "kind": "edit", "model": "Luchii Painter-X", "image_base64": img, "prompt": body.prompt, "engine": engine}
 

@@ -129,7 +129,7 @@ export const showcase = [
   { title: "Chrome Dream", style: "3D Render", img: "/showcase/chrome-dream.jpg", prompt: "Liquid chrome sculpture, studio lighting, octane render, ultra detailed" },
   { title: "Stardust", style: "Cosmic", img: "/showcase/stardust.jpg", prompt: "Vast cosmic nebula in cyan and violet, deep-space photography" },
   { title: "Neon Muse", style: "Fashion", img: "/showcase/neon-muse.jpg", prompt: "Neon-lit fashion editorial portrait, magenta and cyan rim light" },
-  { title: "Golden Hour", style: "Photoreal", img: "/showcase/golden-hour.jpg", prompt: "Cinematic portrait in warm dusk light, shallow depth of field" },
+  { title: "Golden Hour", style: "Photoreal", img: "/showcase/golden-hour.jpg", prompt: "Cinematic portrait of a young woman at golden hour, warm amber sunset light glowing on her face and hair, orange dusk sky behind her, shallow depth of field" },
   { title: "Hyperform", style: "3D Render", img: "/showcase/hyperform.jpg", prompt: "Abstract futuristic form, glossy materials, physically based render" },
   { title: "Nebula Drift", style: "Cosmic", img: "/showcase/nebula-drift.jpg", prompt: "Swirling nebula clouds with glowing stars, ultra high detail" },
   { title: "Lost Valley", style: "Surreal", img: "/showcase/lost-valley.jpg", prompt: "Dreamlike fantasy valley at golden hour, epic scale, painterly" },
