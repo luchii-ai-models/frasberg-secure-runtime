@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { LuchiiBadge } from "../components/LuchiiBadge";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -318,6 +319,7 @@ export default function Generator() {
             ) : image ? (
               <>
                 <img data-testid="result-image" src={image} alt="Generated" className="w-full h-full object-contain" />
+                <LuchiiBadge overlay testId="result-luchii-badge" />
                 {upscaling && (
                   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
                     <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>

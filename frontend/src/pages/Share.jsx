@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { LuchiiBadge } from "../components/LuchiiBadge";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Download, ArrowUpRight, Loader2, ImageOff, Copy } from "lucide-react";
@@ -66,7 +67,8 @@ export default function Share() {
           </div>
         ) : (
           <div className="grid lg:grid-cols-[1.4fr_1fr] gap-8 items-start">
-            <div className="rounded-2xl overflow-hidden border border-white/10 bg-[#1E2327]">
+            <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#1E2327]">
+              <LuchiiBadge overlay testId="share-luchii-badge" />
               <img src={data.image_base64} alt={data.prompt} className="w-full object-contain max-h-[70vh]" />
             </div>
             <div className="lg:pt-4">

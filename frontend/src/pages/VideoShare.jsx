@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useParams } from "react-router-dom";
 import { Clapperboard, Download, Share2, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import Navbar from "../components/Navbar";
+import { LuchiiBadge } from "../components/LuchiiBadge";
 import Footer from "../components/Footer";
 import { shareVideo, isPreviewEngine } from "./Studio";
 
@@ -41,10 +42,11 @@ export default function VideoShare() {
           </p>
         )}
 
-        <div className={`mt-8 rounded-2xl border border-white/10 bg-[#11161A] grid place-items-center overflow-hidden ${vertical ? "max-w-sm mx-auto aspect-[9/16]" : video?.aspect_ratio === "1:1" ? "max-w-xl mx-auto aspect-square" : "aspect-video"}`}>
+        <div className={`relative mt-8 rounded-2xl border border-white/10 bg-[#11161A] grid place-items-center overflow-hidden ${vertical ? "max-w-sm mx-auto aspect-[9/16]" : video?.aspect_ratio === "1:1" ? "max-w-xl mx-auto aspect-square" : "aspect-video"}`}>
           {error ? <p className="text-neutral-500" data-testid="video-share-error">{error}</p>
             : !video ? <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF]" />
             : <video ref={ref} data-testid="video-share-player" src={src} controls autoPlay loop muted playsInline className="w-full h-full object-contain" />}
+          {video && !error && <LuchiiBadge overlay className="!top-3 !right-3 !bottom-auto" testId="video-share-luchii-badge" />}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3 justify-center">

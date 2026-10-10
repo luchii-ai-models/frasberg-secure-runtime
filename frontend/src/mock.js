@@ -119,7 +119,7 @@ export const faqs = [
 export const footerCols = [
   { title: "Product", links: ["Audio", "3D", "Spaces", "Image", "Video", "API"] },
   { title: "Tools", links: ["Image Generator", "Upscaler", "Background Remover", "Photo Editor", "Text to Speech"] },
-  { title: "Company", links: ["About", "Careers", "Blog", "Originals", "Contact"] },
+  { title: "Company", links: ["About Luchii", "About", "Careers", "Blog", "Originals", "Contact"] },
   { title: "Resources", links: ["Help center", "Enterprise", "Community", "Status"] },
 ];
 

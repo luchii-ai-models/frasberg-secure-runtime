@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { LuchiiBadge } from "../components/LuchiiBadge";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search, Clapperboard, RotateCcw, ExternalLink } from "lucide-react";
@@ -81,6 +82,7 @@ function VideoCard({ v }) {
         <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
           className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
+        <LuchiiBadge overlay className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
@@ -220,6 +222,7 @@ export default function Gallery() {
             {items.map((g) => (
               <div key={g.id} className="group relative rounded-xl overflow-hidden border border-white/10 bg-[#1E2327]">
                 <img src={g.image_base64} alt={g.prompt} className="w-full aspect-square object-cover" />
+                <LuchiiBadge overlay className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="absolute bottom-0 inset-x-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="text-xs text-neutral-200 line-clamp-2">{g.prompt}</p>
