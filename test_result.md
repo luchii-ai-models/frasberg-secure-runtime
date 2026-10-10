@@ -216,3 +216,8 @@ agent_communication:
     -agent: "main"
     -message: "NEW (iteration 9): Frasberg Serverless GPU Gateway (backend/frasberg_gpu.py, mounted /api/gpu) + standalone worker (/app/frasberg_gpu_worker). Luchii /api/video now accepts model, aspect_ratio, image_base64 (image-to-video) and routes GPU worker -> frasberg.com (stock samples rejected) -> Frasberg Lite (local CPU). /video UI: engine picker (Motion Fast/Pro/Ultra with live online/offline), Format chips, start-image upload, engine label on results. No real GPU in this pod -> all product engines show offline; protocol tested with hidden frasberg-dev-test engine."
 
+
+## Iteration (2026-10, re-import + image quality)
+agent_communication:
+  - agent: "main"
+    message: "Re-imported. New backend/luchii_sr.py (Real-ESRGAN Luchii Prime). All local image renders (Nova-Muse, Dreamline, Vision, Painter-X) now get an HD 2x SR finish (JPEG). /api/upscale(/jobs) = real 4K (3840px long edge, ~2.5 min). Large images store thumb_base64; /api/generations and /api/my/generations return the thumb in image_base64 with has_full=true; /api/share/{id} returns full. /create UI: badge moved top-right (no overlap with Download), bottom toolbar with resolution chip (result-resolution), Hold to compare (compare-btn) for remixes, RenderProgress bars (render-progress, upscale-progress), 4K ready state."
