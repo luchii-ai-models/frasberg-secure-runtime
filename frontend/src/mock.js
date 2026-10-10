@@ -3,6 +3,7 @@
 export const brand = {
   name: "Frasberg Creator",
   logo: "/frasberg-emblem.png",
+  luchiiLogo: "/luchii-logo.png",
 };
 
 export const navLinks = [
@@ -153,7 +154,8 @@ export const modelFamilies = [
   {
     id: "luchii",
     label: "Luchii Models",
-    blurb: "The Frasberg Creator studio family — expressive creativity with effortless control.",
+    logo: "/luchii-logo.png",
+    blurb: "The Luchii studio family by Frasberg, Inc. — expressive creativity with effortless control.",
     models: [
       { name: "Luchii Nova-Muse", tag: "Creative", desc: "Top-quality, versatile generation across any subject or style.", caps: ["Text to Image"], mode: "text", img: "https://images.unsplash.com/photo-1636690581110-a512fed05fd3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHw0fHxBSSUyMGFydHxlbnwwfHx8fDE3ODY0NTA5OTZ8MA&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Painter-X", tag: "Editing", desc: "Remix any reference photo — restyle, reframe, and transform.", caps: ["Image to Image"], mode: "image", img: "https://images.pexels.com/photos/8108327/pexels-photo-8108327.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940" },

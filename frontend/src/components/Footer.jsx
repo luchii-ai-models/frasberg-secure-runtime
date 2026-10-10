@@ -39,7 +39,7 @@ export default function Footer() {
         </div>
         <div className="mt-14 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-neutral-600">
-            © {new Date().getFullYear()} Frasberg Creator. All rights reserved.
+            © 2003-2026, Frasberg, Inc. or its affiliates
           </p>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600">
             <Link to="/legal/privacy" data-testid="footer-privacy-link" className="hover:text-white transition-colors">Privacy</Link>

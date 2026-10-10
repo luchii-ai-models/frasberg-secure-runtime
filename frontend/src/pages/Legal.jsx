@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
-const SEP = "Frasberg Creator is the platform operated by Frasberg, Inc. Luchii Models are separate Frasberg-owned AI models. Frasberg Creator uses Luchii Models and Frasberg LLM internally. Luchii Models are not Frasberg Creator. Luchii is Frasberg AI Models and Intelligence.";
+const SEP = "Frasberg Creator is the platform operated by Frasberg, Inc. Luchii Models are separate Frasberg-owned AI models. Frasberg Creator uses Luchii Models and Frasberg LLM internally. Luchii Models are not Frasberg Creator. Luchii is Frasberg AI Models and Intelligence. Frasberg.com and Frasberg, Inc. own and operate Luchii AI Models and all Luchii products and systems.";
 
 const DOCS = {
   privacy: {

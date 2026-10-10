@@ -92,7 +92,7 @@ export default function Share() {
               </div>
               <div className="mt-10 rounded-2xl border border-white/10 bg-[#1E2327] p-5">
                 <p className="text-sm text-neutral-300">
-                  Made with <span className="font-semibold text-white">Frasberg Creator</span> — the creative
+                  Made with <span className="font-semibold text-white">Luchii</span> — the creative
                   platform to direct your best work.
                 </p>
                 <Button onClick={() => navigate("/create")}

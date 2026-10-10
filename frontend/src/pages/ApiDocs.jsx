@@ -70,8 +70,9 @@ export default function ApiDocs() {
           ))}
         </div>
 
-        <p className="mt-10 text-xs text-neutral-600">
-          Luchii Models are separate Frasberg-owned AI models used internally by Frasberg Creator. Contact enterprise@frasberg.com for API keys, rate limits, and usage plans.
+        <p className="mt-10 text-xs text-neutral-600 flex items-center gap-2">
+          <img src="/luchii-logo.png" alt="Luchii logo" className="w-6 h-6 rounded-full object-contain shrink-0" />
+          <span>Luchii Models are separate Frasberg-owned AI models used internally by Frasberg Creator. Contact enterprise@frasberg.com for API keys, rate limits, and usage plans.</span>
         </p>
       </main>
       <Footer />

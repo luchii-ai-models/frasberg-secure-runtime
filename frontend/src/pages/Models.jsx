@@ -67,7 +67,8 @@ export default function Models() {
       {families.map((fam) => (
         <section key={fam.id} className="max-w-[1400px] mx-auto px-5 md:px-8 py-12 md:py-16">
           <div className="max-w-3xl mb-8">
-            <h2 className="font-display font-bold tracking-tight text-2xl md:text-4xl">
+            <h2 className="font-display font-bold tracking-tight text-2xl md:text-4xl flex items-center gap-3">
+              {fam.logo && <img src={fam.logo} alt="Luchii logo" data-testid={`family-logo-${fam.id}`} className="w-10 h-10 md:w-12 md:h-12 rounded-full object-contain" />}
               {fam.label}
             </h2>
             <p className="mt-3 text-neutral-400 text-base md:text-lg">{fam.blurb}</p>
@@ -103,7 +104,10 @@ export default function Models() {
                 </div>
 
                 <div className="p-5 flex flex-col flex-1">
-                  <h3 className="font-display font-semibold text-lg">{m.name}</h3>
+                  <h3 className="font-display font-semibold text-lg flex items-center gap-2">
+                    {fam.logo && <img src={fam.logo} alt="Luchii logo" className="w-6 h-6 rounded-full object-contain" />}
+                    {m.name}
+                  </h3>
                   <p className="mt-1.5 text-sm text-neutral-400 flex-1">{m.desc}</p>
                   <div className="flex flex-wrap gap-1.5 mt-4">
                     {m.caps.map((c) => (
