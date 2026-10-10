@@ -1,8 +1,8 @@
-// Mock data for Luchii — replaced by backend where noted in contracts.md
+// Mock data for Frasberg Creator — replaced by backend where noted in contracts.md
 
 export const brand = {
-  name: "Luchii",
-  logo: "/luchii-logo.png",
+  name: "Frasberg Creator",
+  logo: "/frasberg-emblem.png",
 };
 
 export const navLinks = [
@@ -86,7 +86,7 @@ export const tools = [
   { title: "3D Studio", desc: "Generate 3D objects and assets from a prompt", route: "/3d" },
   { title: "Spaces Builder", desc: "Build interactive 3D worlds and scenes", route: "/spaces" },
   { title: "Change Camera Angle", desc: "Reframe any shot from a new angle", mode: "image", preset: "Reframe this shot from a new camera angle while keeping the same subject and scene" },
-  { title: "All tools", desc: "Explore the full Luchii toolset", mode: "text" },
+  { title: "All tools", desc: "Explore the full Frasberg Creator toolset", mode: "text" },
 ];
 
 export const useCases = [
@@ -97,9 +97,9 @@ export const useCases = [
 ];
 
 export const testimonials = [
-  { quote: "Best-in-class models and workflow tools through a single unified interface. Luchii has been a key unlock as we've woven AI into our workflows, end to end.", name: "Nick Coronges", role: "CTO at R/GA" },
-  { quote: "We are highly satisfied with Luchii. It consistently delivers high-quality, reliable results while streamlining workflows and enhancing efficiency.", name: "Javier Romero", role: "Global Head of Content" },
-  { quote: "Luchii is a key part of our marketing stack. It helps us create high-quality content at scale as we expand our AI-native platform.", name: "Juan Urdiales", role: "Co-Founder & Co-CEO" },
+  { quote: "Best-in-class models and workflow tools through a single unified interface. Frasberg Creator has been a key unlock as we've woven AI into our workflows, end to end.", name: "Nick Coronges", role: "CTO at R/GA" },
+  { quote: "We are highly satisfied with Frasberg Creator. It consistently delivers high-quality, reliable results while streamlining workflows and enhancing efficiency.", name: "Javier Romero", role: "Global Head of Content" },
+  { quote: "Frasberg Creator is a key part of our marketing stack. It helps us create high-quality content at scale as we expand our AI-native platform.", name: "Juan Urdiales", role: "Co-Founder & Co-CEO" },
 ];
 
 export const pricing = [
@@ -109,10 +109,10 @@ export const pricing = [
 ];
 
 export const faqs = [
-  { q: "What is Luchii?", a: "Luchii is a full creative platform for images — generate, remix (image-to-image), and upscale, all powered by Frasberg." },
-  { q: "What powers Luchii?", a: "Every Luchii tool and model is powered by Frasberg — image, video, voice, music and 3D, all in one place." },
+  { q: "What is Frasberg Creator?", a: "Frasberg Creator is a full creative platform for images — generate, remix (image-to-image), and upscale, all powered by Frasberg." },
+  { q: "What powers Frasberg Creator?", a: "Every Frasberg Creator tool and model is powered by Frasberg — image, video, voice, music and 3D, all in one place." },
   { q: "Who owns the content I create?", a: "You do. Everything you generate belongs to you, and it comes with a full commercial AI license." },
-  { q: "Can I use Luchii for commercial work?", a: "Yes. The content you generate includes a full commercial license so you can use it in real projects." },
+  { q: "Can I use Frasberg Creator for commercial work?", a: "Yes. The content you generate includes a full commercial license so you can use it in real projects." },
 ];
 
 export const footerCols = [
@@ -153,7 +153,7 @@ export const modelFamilies = [
   {
     id: "luchii",
     label: "Luchii Models",
-    blurb: "The Luchii studio family — expressive creativity with effortless control.",
+    blurb: "The Frasberg Creator studio family — expressive creativity with effortless control.",
     models: [
       { name: "Luchii Nova-Muse", tag: "Creative", desc: "Top-quality, versatile generation across any subject or style.", caps: ["Text to Image"], mode: "text", img: "https://images.unsplash.com/photo-1636690581110-a512fed05fd3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHw0fHxBSSUyMGFydHxlbnwwfHx8fDE3ODY0NTA5OTZ8MA&ixlib=rb-4.1.0&q=85" },
       { name: "Luchii Painter-X", tag: "Editing", desc: "Remix any reference photo — restyle, reframe, and transform.", caps: ["Image to Image"], mode: "image", img: "https://images.pexels.com/photos/8108327/pexels-photo-8108327.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940" },

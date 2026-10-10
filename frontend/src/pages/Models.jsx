@@ -37,10 +37,10 @@ export default function Models() {
           <Sparkles className="w-3.5 h-3.5 text-[#00F0FF]" /> One workflow, every model
         </span>
         <h1 className="font-display font-bold tracking-tight text-4xl md:text-6xl mt-6 max-w-4xl mx-auto">
-          The models behind <span className="text-[#00F0FF]">Luchii</span>
+          The models behind <span className="text-[#00F0FF]">Frasberg Creator</span>
         </h1>
         <p className="mt-5 text-neutral-400 text-lg max-w-2xl mx-auto">
-          Every Luchii tool and model is powered by Frasberg — image, video,
+          Every Frasberg Creator tool and model is powered by Frasberg — image, video,
           voice, music and 3D, all from a single interface.
         </p>
       </section>

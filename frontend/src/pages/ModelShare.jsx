@@ -27,7 +27,7 @@ export default function ModelShare() {
       <Navbar />
       <main className="max-w-[1100px] mx-auto px-5 md:px-8 pt-28 pb-24" data-testid="model-share-page">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 mb-5">
-          <Box className="w-3.5 h-3.5 text-[#00F0FF]" /> Made with Luchii 3D Studio · Powered by Frasberg
+          <Box className="w-3.5 h-3.5 text-[#00F0FF]" /> Made with Frasberg Creator 3D Studio · Powered by Frasberg
         </div>
         <h1 className="font-display font-bold tracking-tight text-4xl sm:text-5xl lg:text-6xl" data-testid="model-share-title">
           {error ? "Model not found" : model ? model.prompt : "Loading…"}

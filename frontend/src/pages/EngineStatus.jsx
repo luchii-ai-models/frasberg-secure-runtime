@@ -153,7 +153,7 @@ export default function EngineStatus() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
             <h1 className="font-display font-bold tracking-tight text-4xl md:text-5xl">
-              Luchii <span className="text-[#00F0FF]">engines</span>
+              Frasberg Creator <span className="text-[#00F0FF]">engines</span>
             </h1>
             <p data-testid="engine-summary" className="mt-3 text-neutral-400 text-sm md:text-base">
               {data ? `${online} of ${data.engines.length} engines online · checked ${new Date(data.checked_at).toLocaleTimeString()}` : "Running live checks on every engine…"}

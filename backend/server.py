@@ -188,7 +188,7 @@ async def image_with_fallback(frasberg_payload: dict, local_fn, *args) -> tuple:
     except HTTPException as e:
         logger.warning("Frasberg image failed (%s); using Luchii in-house image engine", e.detail)
     if local_engines.image_busy():
-        raise HTTPException(status_code=429, detail="Luchii is finishing another image. Yours is in the queue.",
+        raise HTTPException(status_code=429, detail="Frasberg Creator is finishing another image. Yours is in the queue.",
                             headers={"Retry-After": "8"})
     try:
         return await asyncio.to_thread(local_fn, *args), "luchii-local"
@@ -261,7 +261,7 @@ class TTSIn(BaseModel):
 # ---------- routes ----------
 @api.get("/")
 async def root():
-    return {"message": "Luchii API is running"}
+    return {"message": "Frasberg Creator API is running"}
 
 
 @api.post("/auth/register")
@@ -1078,7 +1078,7 @@ async def gpu_admin_notebook(request: Request, gateway: str, models: str = "fras
         raise HTTPException(status_code=422, detail="gateway must be an https URL ending in /api/gpu")
     own_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].split(":")[0]
     if urlparse(gateway).hostname != own_host:
-        raise HTTPException(status_code=422, detail="gateway must point at this Luchii server")
+        raise HTTPException(status_code=422, detail="gateway must point at this Frasberg Creator server")
     wanted = [m for m in models.split(",") if m in frasberg_gpu.MODELS]
     nb = frasberg_gpu.build_notebook(gateway, os.environ["FRASBERG_WORKER_SECRET"], ",".join(wanted) or "frasberg-motion-free")
     return Response(content=_json.dumps(nb, indent=1), media_type="application/x-ipynb+json",

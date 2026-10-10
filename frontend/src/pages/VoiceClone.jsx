@@ -82,7 +82,7 @@ export default function VoiceClone() {
       const fd = new FormData();
       fd.append("file", file, file.name);
       const { data } = await axios.post(`${API}/voice/clone`, fd, { headers: authHeader });
-      toast.success(`Voice sample saved (${data.duration_sec ?? "?"}s) — Luchii can now speak in your voice`);
+      toast.success(`Voice sample saved (${data.duration_sec ?? "?"}s) — Frasberg Creator can now speak in your voice`);
       await load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upload failed");
@@ -110,10 +110,10 @@ export default function VoiceClone() {
       <Navbar />
       <main className="max-w-3xl mx-auto px-5 md:px-8 pt-28 pb-24" data-testid="voice-clone-page">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 mb-5">
-          <AudioLines className="w-3.5 h-3.5 text-[#00F0FF]" /> Luchii Voice Cloning
+          <AudioLines className="w-3.5 h-3.5 text-[#00F0FF]" /> Frasberg Creator Voice Cloning
         </div>
         <h1 className="font-display font-bold tracking-tight text-4xl md:text-5xl">
-          Let Luchii speak in <span className="text-[#00F0FF]">your voice</span>
+          Let Frasberg Creator speak in <span className="text-[#00F0FF]">your voice</span>
         </h1>
         <p className="mt-3 text-neutral-400 text-sm md:text-base">Record 5–15 seconds of natural speech, then type anything and hear it in your own voice.</p>
 

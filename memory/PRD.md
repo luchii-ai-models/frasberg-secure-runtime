@@ -103,3 +103,4 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - Re-imported luchii-ai-models/frasberg-secure-runtime. Recreated backend/.env with the 8 user frb_live keys + FRASBERG_KEY_ROUTES, installed deps + ffmpeg, re-created admin.tester / motion.tester accounts. Smoke tests passed (iteration_12).
 - /status GPU panel polling now pauses when the tab is hidden.
 - P2 in-app chat assistant was built, then REMOVED at the user's request (it is not wanted in the app). Do not re-add it.
+- 2026-06: Rebranded the platform from "Luchii" to "Frasberg Creator" (nav, hero, footer, auth, legal, studios, share pages, title, toasts) with the FA Frasberg emblem as logo + favicon. "Luchii" now only names the Frasberg AI models and intelligence (Luchii Models, Luchii Prime, Vision, etc.). Internal storage keys (luchii_token) unchanged.

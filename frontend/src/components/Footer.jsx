@@ -10,9 +10,9 @@ export default function Footer() {
         <div className="grid md:grid-cols-5 gap-10">
           <div className="md:col-span-1">
             <Link to="/" className="flex items-center gap-2">
-              <img src={brand.logo} alt="Luchii logo" className="w-9 h-9 rounded-full object-contain" />
+              <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
               <span className="font-display text-lg font-bold">
-                Luchii
+                Frasberg Creator
               </span>
             </Link>
             <p className="mt-4 text-sm text-neutral-500 max-w-xs">
@@ -39,7 +39,7 @@ export default function Footer() {
         </div>
         <div className="mt-14 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-neutral-600">
-            © {new Date().getFullYear()} Luchii. All rights reserved.
+            © {new Date().getFullYear()} Frasberg Creator. All rights reserved.
           </p>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600">
             <Link to="/legal/privacy" data-testid="footer-privacy-link" className="hover:text-white transition-colors">Privacy</Link>

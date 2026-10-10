@@ -55,7 +55,7 @@ export default function Generator() {
   const [queued, setQueued] = useState(false);
   const markQueued = (q) => {
     setQueued((prev) => {
-      if (q && !prev) toast("Your image is in the queue", { description: "Luchii is finishing another image. Yours starts next." });
+      if (q && !prev) toast("Your image is in the queue", { description: "Frasberg Creator is finishing another image. Yours starts next." });
       return q;
     });
   };
@@ -90,7 +90,7 @@ export default function Generator() {
     const link = shareLink(resultId);
     try {
       if (navigator.share) {
-        await navigator.share({ title: "My Luchii creation", url: link });
+        await navigator.share({ title: "My Frasberg Creator creation", url: link });
       } else {
         await navigator.clipboard.writeText(link);
         toast.success("Share link copied to clipboard!");
@@ -139,7 +139,7 @@ export default function Generator() {
       setImage(url);
       setResultId(res.data.id);
       setHistory((h) => [{ id: res.data.id, url, prompt }, ...h].slice(0, 8));
-      toast.success(user ? "Saved to your gallery!" : "Image generated with Luchii!");
+      toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
     } finally {
@@ -172,9 +172,9 @@ export default function Generator() {
       <header className="sticky top-0 z-40 bg-[#12171B]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-[1400px] mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={brand.logo} alt="Luchii logo" className="w-9 h-9 rounded-full object-contain" />
+            <img src={brand.logo} alt="Frasberg Creator logo" className="w-9 h-9 rounded-full object-contain" />
             <span className="font-display text-lg font-bold">
-              Luchii
+              Frasberg Creator
             </span>
           </Link>
           <div className="flex items-center gap-4">
@@ -197,7 +197,7 @@ export default function Generator() {
           <div>
             <h1 className="font-display text-2xl font-bold">AI Image Generator</h1>
             <p className="text-sm text-neutral-500 mt-1">
-              Describe it or remix a photo. Luchii brings it to life.
+              Describe it or remix a photo. Frasberg Creator brings it to life.
             </p>
           </div>
 
@@ -312,7 +312,7 @@ export default function Generator() {
               <div data-testid={queued ? "image-queue-notice" : "image-loading"}>
                 <LogoLoader
                   label={queued ? "Your image is in the queue..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
-                  sublabel={queued ? "Luchii is finishing another image. Yours starts next." : "Powered by Frasberg"}
+                  sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "Powered by Frasberg"}
                 />
               </div>
             ) : image ? (
@@ -322,7 +322,7 @@ export default function Generator() {
                   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
                     <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>
                       <LogoLoader label={queued ? "Your upscale is in the queue..." : "Enhancing to 4K..."}
-                        sublabel={queued ? "Luchii is finishing another image. Yours starts next." : "AI detail re-render"} />
+                        sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "AI detail re-render"} />
                     </div>
                   </div>
                 )}
@@ -335,7 +335,7 @@ export default function Generator() {
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Share2 className="w-4 h-4" /> Share
                   </button>
-                  <a href={image} download="luchii-ai.png"
+                  <a href={image} download="frasberg-creator.png"
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Download className="w-4 h-4" /> Download
                   </a>
