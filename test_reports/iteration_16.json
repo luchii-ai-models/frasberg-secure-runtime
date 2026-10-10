@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 16: Full backend + frontend verification of Luchii Chat backend, Agents, Chat model picker + nav rename to 'Luchii Code'. 9/9 pytest cases pass (chat models public, 401 without auth, JWT + X-Frasberg-Key owners, SSE streaming with conversation_id/delta/done + upstream turbulence error reported, conv GET returns user+assistant msgs, DELETE then 404, other-owner 404, invalid agent type -> 422, music agent task dispatched with job_id in <60s). Frontend: nav-about-luchii label='Luchii Code' with Luchii logo and routes to /about-luchii on desktop and mobile; footer-about-luchii-link='Luchii Code'; no floating chat widget on site. /create text mode shows luchii-model-nova-muse (aria-pressed=true by default), luchii-model-dreamline, luchii-model-vision; clicking Dreamline flips aria-pressed. ?mode=text&model=Luchii%20Dreamline preselects Dreamline. Image-to-Image mode shows only luchii-model-painter-x. /models 'Try this model' on Dreamline card navigates to /create?mode=text&model=Luchii%20Dreamline and preselects Dreamline.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_luchii_chat.py", "/app/test_reports/pytest/iter16.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "chat_owner correctly resolves owner from JWT first, then X-Frasberg-Key presence in FRASBERG_KEYS; platform owner is namespaced as 'platform:<keyslice>' which cleanly isolates platform-owned conversations from user ones (other-owner 404 confirmed).",
+    "chat_send detects upstream 'turbulence' in streamed text and surfaces a human-friendly error on the final SSE event while still persisting both user and assistant messages (good UX for upstream degradation).",
+    "_run_agent_task uses asyncio.create_task fire-and-forget which is appropriate for queued->dispatched workflow; errors are captured and stored on the task document.",
+    "LUCHII_PICKER + luchiiModelFor priority order (explicit model > kind/mode/style defaults) correctly honors the new URL preselect flow from /models Try button."
+  ],
+  "updated_files": ["/app/backend/tests/test_luchii_chat.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100%"},
+  "test_credentials": "motion.tester@luchiiapp.com / Motion123! ; X-Frasberg-Key frb_live_57d798ce654b65b02abe0d76d29e22a855ecf82e",
+  "seed_data_creation": "Pytest created one chat conversation and one music agent task (duration=5s); conversation is deleted by the delete test. Agent task row remains in agent_tasks (no delete endpoint); main agent may purge if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Chat SSE streaming works; expected final error is 'Luchii Chat (Frasberg) replied with a turbulence error' due to upstream Frasberg behavior (not a bug). Agent music task takes ~5-15s to transition queued->dispatched. Image agent tasks are heavy (downloads model) — do not test. Picker testids follow slug of 2nd word (nova-muse, dreamline, vision, painter-x).",
+  "rca of the issue": "No issues."
+}
