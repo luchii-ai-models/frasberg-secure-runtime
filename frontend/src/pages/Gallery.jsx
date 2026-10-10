@@ -83,7 +83,7 @@ function VideoCard({ v }) {
         <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
           className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
-        <LuchiiBadge overlay model={luchiiModelFor("video", null, v.mode)} className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
+        <LuchiiBadge overlay model={videoModel(v)} className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
@@ -94,7 +94,7 @@ function VideoCard({ v }) {
       <div className="p-3 space-y-2 mt-auto">
         <p className="text-xs text-neutral-300 line-clamp-2" title={v.prompt}>{v.prompt}</p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] text-neutral-500 truncate">{v.engine} · {v.duration}s</span>
+          <span className="text-[10px] text-neutral-500 truncate">{v.duration}s · {v.aspect_ratio}</span>
           <div className="flex items-center gap-2.5 shrink-0">
             <button onClick={replay} title="Replay" data-testid={`gallery-video-replay-${v.id}`} className="text-white/70 hover:text-white"><RotateCcw className="w-4 h-4" /></button>
             <button onClick={() => shareVideo(v.id)} title="Share" data-testid={`gallery-video-share-${v.id}`} className="text-white/70 hover:text-white"><Share2 className="w-4 h-4" /></button>
@@ -131,7 +131,7 @@ const useModelFilter = (list, modelOf) => {
   return { model: active, setModel, options, shown };
 };
 
-const videoModel = (v) => luchiiModelFor("video", null, v.mode);
+const videoModel = (v) => luchiiModelFor("video", null, v.mode, v.luchii_model);
 const imageModel = (g) => luchiiModelFor(g.kind, g.style, null, g.model);
 
 function VideosList({ videos }) {

@@ -530,13 +530,24 @@ class JobIn(BaseModel):
     model: Optional[str] = None          # Frasberg GPU engine id (video only)
     aspect_ratio: Optional[str] = "16:9"
     image_base64: Optional[str] = None   # start frame for image-to-video
+    luchii_model: Optional[str] = None
+
+
+LUCHII_MEDIA_MODELS = {"video": ("Luchii Cinematica", "Luchii Animus"), "music": ("Luchii Harmonia",)}
+
+
+def luchii_media_model(kind: str, requested: Optional[str], has_image: bool) -> str:
+    if requested in LUCHII_MEDIA_MODELS.get(kind, ()):
+        return requested
+    return ("Luchii Animus" if has_image else "Luchii Cinematica") if kind == "video" else "Luchii Harmonia"
 
 
 async def job_out(job: dict) -> dict:
     out = {"job_id": job["id"], "kind": job["kind"], "status": job["status"], "prompt": job.get("prompt"),
            "style": job.get("style"), "duration": job.get("duration"), "error": job.get("error"),
            "engine": ENGINE_LABELS.get(job.get("render_engine") or "", job.get("render_engine")), "model": job.get("model"),
-           "mode": "image-to-video" if job.get("has_image") else None, "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
+           "mode": "image-to-video" if job.get("has_image") else None,
+           "luchii_model": job.get("luchii_model"), "progress": job.get("progress"), "url": f"/api/media/{job['id']}" if job["status"] == "completed" else None}
     if job["status"] == "queued":
         out["queue_position"] = await db.jobs.count_documents(
             {"kind": job["kind"], "engine": "local", "status": {"$in": ["queued", "running"]},
@@ -669,6 +680,7 @@ async def create_media_job(kind: str, body: JobIn, user: Optional[dict]):
            "style": body.style, "duration": max(lo, min(hi, body.duration)), "error": None,
            "model": body.model if kind == "video" else None, "aspect_ratio": body.aspect_ratio or "16:9",
            "has_image": bool(body.image_base64 and kind == "video"),
+           "luchii_model": luchii_media_model(kind, body.luchii_model, bool(body.image_base64 and kind == "video")),
            "user_id": user["id"] if user else None, "created_at": now_iso()}
     await db.jobs.insert_one(job.copy())
     asyncio.create_task(run_media({**job, "image_base64": body.image_base64 if kind == "video" else None}))
@@ -691,7 +703,7 @@ ENGINE_LABELS = {"luchii-local": "Frasberg Lite (CPU)", "frasberg": "Frasberg Ed
 def video_card(j: dict) -> dict:
     return {"id": j["id"], "prompt": j.get("prompt"), "style": j.get("style"), "duration": j.get("duration"),
             "engine": ENGINE_LABELS.get(j.get("render_engine") or "", j.get("render_engine")) or "Frasberg Lite (CPU)",
-            "model": j.get("model"),
+            "model": j.get("model"), "luchii_model": j.get("luchii_model"),
             "mode": "image-to-video" if j.get("has_image") else "text-to-video",
             "aspect_ratio": j.get("aspect_ratio") or "16:9", "url": f"/api/media/{j['id']}",
             "author": j.get("author"), "created_at": j.get("created_at"), "finished_at": j.get("finished_at")}
@@ -1264,6 +1276,57 @@ async def agent_task(body: AgentTaskIn, owner: str = Depends(chat_owner), user: 
     await db.agent_tasks.insert_one(task.copy())
     asyncio.create_task(_run_agent_task(task, user))
     return task
+
+
+class AgentBundleIn(BaseModel):
+    idea: str = Field(min_length=1, max_length=400)
+    image_model: Optional[str] = None
+    style: Optional[str] = None
+
+
+async def _wait_job(job_id: str, timeout: int = 1800):
+    for _ in range(timeout // 5):
+        j = await db.jobs.find_one({"id": job_id}, {"_id": 0, "status": 1})
+        if not j or j["status"] in ("completed", "failed"):
+            return
+        await asyncio.sleep(5)
+
+
+async def _run_bundle(tasks: list, user: Optional[dict]):
+    for t in tasks:
+        await _run_agent_task(t, user)
+        done = await db.agent_tasks.find_one({"id": t["id"]}, {"_id": 0})
+        if done and (done.get("result") or {}).get("job_id"):
+            await _wait_job(done["result"]["job_id"])
+
+
+@api.post("/chat/agents/bundle")
+async def agent_bundle(body: AgentBundleIn, owner: str = Depends(chat_owner), user: Optional[dict] = Depends(optional_user)):
+    bundle_id, now = str(uuid.uuid4()), now_iso()
+    idea = body.idea.strip()
+    specs = [("image", idea, body.style or "cinematic", body.image_model, 0),
+             ("video", f"{idea}, cinematic camera movement", body.style or "cinematic", None, 5),
+             ("music", f"Soundtrack for: {idea}", None, None, 15)]
+    tasks = [{"id": str(uuid.uuid4()), "bundle_id": bundle_id, "owner": owner, "type": ty, "prompt": pr[:500],
+              "style": st, "model": mo, "duration": du, "conversation_id": None, "status": "queued",
+              "result": None, "error": None, "created_at": now, "updated_at": now} for ty, pr, st, mo, du in specs]
+    await db.agent_tasks.insert_many([t.copy() for t in tasks])
+    asyncio.create_task(_run_bundle(tasks, user))
+    return {"bundle_id": bundle_id, "idea": idea, "tasks": tasks}
+
+
+@api.get("/chat/agents/bundle/{bid}")
+async def agent_bundle_status(bid: str, owner: str = Depends(chat_owner)):
+    tasks = await db.agent_tasks.find({"bundle_id": bid, "owner": owner}, {"_id": 0}).to_list(10)
+    if not tasks:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    for t in tasks:
+        res = t.get("result") or {}
+        if res.get("job_id"):
+            j = await db.jobs.find_one({"id": res["job_id"]}, {"_id": 0})
+            t["job"] = await job_out(j) if j else None
+    order = {"image": 0, "video": 1, "music": 2}
+    return {"bundle_id": bid, "tasks": sorted(tasks, key=lambda t: order[t["type"]])}
 
 
 @api.get("/chat/agents/tasks/{tid}")

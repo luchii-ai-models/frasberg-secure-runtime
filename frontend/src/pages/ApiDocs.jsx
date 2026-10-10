@@ -1,7 +1,10 @@
 import React from "react";
-import { Terminal, Sparkles } from "lucide-react";
+import { Terminal, Sparkles, Lock, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { ChatDocs } from "../components/ChatDocs";
+import { useAuth } from "../context/AuthContext";
 
 const ENDPOINTS = [
   { method: "POST", path: "/v1/image/generate", model: "Nova-Muse", status: "Live", desc: "Generate images from a text prompt." },
@@ -9,7 +12,7 @@ const ENDPOINTS = [
   { method: "POST", path: "/v1/image/upscale", model: "Luchii Prime", status: "Live", desc: "Upscale and enhance to crisp 4K detail." },
   { method: "POST", path: "/v1/audio/tts", model: "Vocalist Prime", status: "Live", desc: "Convert text into natural speech." },
   { method: "POST", path: "/v1/audio/sts", model: "Astral Echo", status: "Live", desc: "Speech-to-speech voice conversion." },
-  { method: "POST", path: "/v1/video/generate", model: "Frasberg Motion", status: "Live", desc: "Generate cinematic video from a prompt." },
+  { method: "POST", path: "/v1/video/generate", model: "Luchii Cinematica", status: "Live", desc: "Generate cinematic video from a prompt." },
   { method: "POST", path: "/v1/spaces/generate", model: "Realmweaver", status: "Live", desc: "Build interactive 3D spaces." },
   { method: "POST", path: "/v1/3d/generate", model: "Sculptor Core", status: "Live", desc: "Generate 3D objects and assets." },
 ];
@@ -24,7 +27,27 @@ const StatusPill = ({ s }) => (
   </span>
 );
 
+const LoginGate = () => (
+  <main className="max-w-xl mx-auto px-5 pt-40 pb-32 text-center" data-testid="api-docs-login-gate">
+    <Lock className="w-10 h-10 mx-auto text-[#00F0FF]" />
+    <h1 className="font-display font-bold text-3xl md:text-4xl mt-5">Sign in to view the API</h1>
+    <p className="mt-3 text-neutral-400 text-sm md:text-base">The Frasberg Creator and Luchii Chat developer docs are available to signed-in creators.</p>
+    <Link to="/login?next=/developers" data-testid="api-docs-login-btn"
+      className="inline-flex mt-7 rounded-full bg-[#00F0FF] text-black font-semibold px-6 py-3 hover:bg-[#00d4de] transition-colors">Log in</Link>
+  </main>
+);
+
 export default function ApiDocs() {
+  const { user, loading } = useAuth();
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-[#05060A] text-white">
+        <Navbar />
+        {loading ? <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF] mx-auto mt-40" /> : <LoginGate />}
+        <Footer />
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-[#05060A] text-white">
       <Navbar />
@@ -69,6 +92,8 @@ export default function ApiDocs() {
             </div>
           ))}
         </div>
+
+        <ChatDocs />
 
         <p className="mt-10 text-xs text-neutral-600 flex items-center gap-2">
           <img src="/luchii-logo.png" alt="Luchii logo" className="w-6 h-6 rounded-full object-contain shrink-0" />

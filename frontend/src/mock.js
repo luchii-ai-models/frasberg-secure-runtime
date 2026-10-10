@@ -9,6 +9,7 @@ export const brand = {
 export const navLinks = [
   { label: "Create", href: "/create" },
   { label: "Tools", href: "#tools" },
+  { label: "Agent", href: "/agent" },
   { label: "Models", href: "/models" },
   { label: "API", href: "/developers" },
   { label: "Luchii Code", href: "/about-luchii", luchii: true },
