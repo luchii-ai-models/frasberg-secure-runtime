@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 19 - End-to-end verification of the new in-house photoreal image engine (Luchii Nova-Muse) and the new async image-jobs API (POST /api/generate/jobs, /api/edit/jobs, /api/upscale/jobs; GET /api/image-jobs/{id}). Backend: 7/7 pytest pass including the heavy Nova-Muse photoreal job (completed in ~109s on CPU). Frontend /create: Luchii Vision generates in <3 min with correct result-image data URL and 'Luchii Vision' badge; Luchii Nova-Muse shows the 'photoreal render · about 2 minutes' sublabel on image-loading, then renders a convincing photoreal portrait with 'Luchii Nova-Muse' badge (no 502 / error toast; 'Saved to your gallery!' success toast). Homepage showcase: all 8 cards (Chrome Dream, Stardust, Neon Muse, Golden Hour, Hyperform, Nebula Drift, Lost Valley, Deep Current) load from /showcase/*.jpg (no unsplash/pexels), each with naturalWidth>0 (448-640 px).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_image_jobs.py",
+    "/app/test_reports/pytest/iter19_light.xml",
+    "/app/test_reports/pytest/iter19_nova.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Async image-job design is clean: _start_image_job -> _run_image_job polls with 429-aware backoff (150 attempts * 8s), persists stale jobs after 20 min; GET /api/image-jobs/{id} properly excludes Mongo _id and rehydrates image_base64 from generations collection to keep job docs small.",
+    "/api/generate still works as a sync endpoint for fast models (Vision) - regression preserved.",
+    "Generator.jsx shows the 'Luchii Nova-Muse photoreal render · about 2 minutes' sublabel conditioned on pickModel === 'Luchii Nova-Muse', matches the backend engine routing (PHOTO_MODELS = {Luchii Nova-Muse}).",
+    "Showcase images are self-hosted under /showcase/*.jpg (no external image dependency), fulfilling the zero-cost / Frasberg-only policy."
+  ],
+  "updated_files": ["/app/backend/tests/test_image_jobs.py"],
+  "success_rate": {"backend": "100% (7/7 image-job tests)", "frontend": "100% (Vision + Nova-Muse + 8/8 showcase images)"},
+  "test_credentials": "motion.tester@luchiiapp.com / Motion123! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests created 3 generation docs + 5 image_jobs rows under motion.tester user; left in db.luchii-tools for inspection (image_base64 persisted).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Image-job endpoints are stable. Nova-Muse photoreal engine was observed to finish in ~109s under this test run (well below the 5-min budget). If a future run queues behind concurrent music/video jobs it can take longer - the pytest already allows 360s and the Playwright polling allows 300s. Use ctx.request (Playwright) rather than urllib to call /api/auth/login from the browser-automation runner (urllib hits CF 403); API-login + localStorage.setItem('luchii_token', token) pattern works reliably.",
+  "rca of the issue": "N/A - all tested functionality works as specified."
+}
