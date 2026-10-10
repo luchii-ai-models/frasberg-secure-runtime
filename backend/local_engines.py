@@ -206,6 +206,30 @@ def _to_data_url(img) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+def _to_jpeg_url(img, quality: int = 93) -> str:
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=quality, subsampling=0, optimize=True)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+HD_SCALE = 2  # every 512px render is super-resolved (Luchii Prime compact, ~7s) to a crisp 2x HD image
+SR_BLEND = 0.8  # keep 20% of the Lanczos image so skin and fabric keep natural texture
+
+
+def _hd(img, longest: Optional[int] = None, kind: str = "compact") -> str:
+    """Luchii Prime finishing pass: real-ESRGAN super-resolution, blended with Lanczos for natural texture."""
+    from PIL import Image
+    import luchii_sr
+    target = longest or max(img.size) * HD_SCALE
+    try:
+        sr = luchii_sr.enhance(img, target, kind)
+        soft = img.convert("RGB").resize(sr.size, Image.LANCZOS)
+        return _to_jpeg_url(Image.blend(soft, sr, SR_BLEND))
+    except Exception:  # noqa: BLE001
+        logger.exception("Luchii Prime finishing pass failed; returning the base render")
+        return _to_data_url(img)
+
+
 def _load_image(b64: str, longest: int):
     from PIL import Image
     raw = base64.b64decode(b64.split(",", 1)[1] if b64.startswith("data:") else b64)
@@ -213,6 +237,17 @@ def _load_image(b64: str, longest: int):
     scale = longest / max(img.size)
     w, h = (max(64, int(d * scale) // 64 * 64) for d in img.size)
     return img.resize((w, h), Image.LANCZOS)
+
+
+def preview(b64: str, longest: int = 768) -> str:
+    """Light JPEG preview of a large (HD/4K) image for gallery and history lists."""
+    from PIL import Image
+    raw = base64.b64decode(b64.split(",", 1)[1] if b64.startswith("data:") else b64)
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    img.thumbnail((longest, longest), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def thumbnail(b64: str) -> str:
@@ -228,7 +263,7 @@ def generate_image(prompt: str, aspect: Optional[str] = "1:1") -> str:
         _claim("image")
         t2i, _ = _pipes()
         img = t2i(prompt=prompt, num_inference_steps=1, guidance_scale=0.0, width=w, height=h).images[0]
-    return _to_data_url(img)
+        return _hd(img)
 
 
 def edit_image(prompt: str, image_b64: str, strength: float = 0.6, longest: int = 512) -> str:
@@ -243,7 +278,8 @@ def edit_image(prompt: str, image_b64: str, strength: float = 0.6, longest: int 
 
 # ---------- Painter-X: instruction-based editing (InstructPix2Pix) ----------
 EDIT_MODEL = "timbrooks/instruct-pix2pix"
-EDIT_STEPS = 8
+EDIT_STEPS = 10
+EDIT_IMAGE_GUIDANCE = 1.6  # a little higher than the 1.5 default so faces and layout stay closer to the photo
 
 
 def _ip2p_pipe():
@@ -275,12 +311,28 @@ def instruct_edit(instruction: str, image_b64: str, longest: int = 512) -> str:
         _claim("edit")
         pipe = _ip2p_pipe()
         img = pipe(instruction, image=src, num_inference_steps=EDIT_STEPS, guidance_scale=7.0,
-                   image_guidance_scale=1.5).images[0]
-    return _to_data_url(img)
+                   image_guidance_scale=EDIT_IMAGE_GUIDANCE).images[0]
+        return _hd(img)
+
+
+UPSCALE_BASE = 640     # Prime (RRDB x4) input size: 640 -> 2560 in ~2.5 min on this 2-core CPU
+UPSCALE_LONGEST = 3840  # true 4K UHD long edge
 
 
 def upscale_image(image_b64: str) -> str:
-    return edit_image("high resolution, sharp fine detail, crisp, best quality", image_b64, strength=0.3, longest=768)
+    """Luchii Prime 4K: Real-ESRGAN x4plus super-resolution, then resampled to a 3840px long edge."""
+    from PIL import Image
+    raw = base64.b64decode(image_b64.split(",", 1)[1] if image_b64.startswith("data:") else image_b64)
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    if max(img.size) > UPSCALE_BASE:
+        s = UPSCALE_BASE / max(img.size)
+        img = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
+    import luchii_sr
+    with _image_lock:
+        big = luchii_sr.enhance(img, UPSCALE_LONGEST, "prime")
+        soft = img.resize(big.size, Image.LANCZOS)
+        out = Image.blend(soft, big, 0.85)
+    return _to_jpeg_url(out, 90)
 
 
 def _photo_pipe():
@@ -321,7 +373,7 @@ def generate_photo(prompt: str, aspect: Optional[str] = "1:1", draft: bool = Fal
         gen = torch.Generator().manual_seed(int(seed)) if seed is not None else None
         img = pipe(prompt=prompt, negative_prompt=PHOTO_NEGATIVE, num_inference_steps=PHOTO_DRAFT_STEPS if draft else PHOTO_STEPS,
                    guidance_scale=1.0, width=w, height=h, generator=gen).images[0]
-    return _to_data_url(img)
+        return _hd(img)
 
 
 def image_busy() -> bool:

@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
   Sparkles, Wand2, Download, Loader2, ImageIcon, ArrowLeft, Dice5,
-  Upload, X, Maximize2, LayoutGrid, Type, Images, Share2,
+  Upload, X, Maximize2, LayoutGrid, Type, Images, Share2, SplitSquareHorizontal, CheckCircle2,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -15,6 +15,7 @@ import { PresetRow } from "../components/PresetRow";
 import { IMAGE_PRESETS } from "../presets";
 import { useAuth } from "../context/AuthContext";
 import LogoLoader from "../components/LogoLoader";
+import RenderProgress from "../components/RenderProgress";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -79,6 +80,21 @@ export default function Generator() {
   const [draftMode, setDraftMode] = useState(true); // Nova-Muse quick preview (<1 min) before the full render
   const [lastDraft, setLastDraft] = useState(null); // {prompt, style, aspect_ratio, model, seed} of the shown draft
   const [renderingFull, setRenderingFull] = useState(false);
+  const [beforeImage, setBeforeImage] = useState(null); // original photo of a Painter-X remix (for compare)
+  const [comparing, setComparing] = useState(false);
+  const [dims, setDims] = useState(null); // natural size of the shown result
+  const is4k = dims && Math.max(dims.w, dims.h) >= 3800;
+
+  const openHistory = async (h) => {
+    setLastDraft(null); setBeforeImage(null); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse");
+    setImage(h.url);
+    if (h.hasFull) { // lists carry a light preview of HD/4K images; load the full file
+      try {
+        const { data } = await axios.get(`${API}/share/${h.id}`);
+        if (data?.image_base64) setImage(data.image_base64);
+      } catch (_) { /* keep the preview */ }
+    }
+  };
 
   // Apply tool preset from URL (?mode=text|image&preset=...)
   useEffect(() => {
@@ -94,7 +110,7 @@ export default function Generator() {
         const res = await axios.get(`${API}/generations`, {
           params: { session_id: getSessionId(), limit: 8 },
         });
-        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style, null, g.model) })));
+        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, hasFull: !!g.has_full, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style, null, g.model) })));
       } catch (e) { /* non-critical */ }
     };
     load();
@@ -134,9 +150,10 @@ export default function Generator() {
 
   const isNova = mode === "text" && pickModel === "Luchii Nova-Muse";
 
-  const showResult = (res, usedPrompt) => {
+  const showResult = (res, usedPrompt, before = null) => {
     const url = res.data.image_base64;
     setImage(url);
+    setBeforeImage(before);
     setResultId(res.data.id);
     const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
     setResultModel(model);
@@ -184,7 +201,7 @@ export default function Generator() {
           { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId(),
             ...(isNova ? { quality: draftMode ? "draft" : "full" } : {}) }, authHeader, markQueued);
       }
-      showResult(res, prompt);
+      showResult(res, prompt, mode === "image" ? refImage : null);
       toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
@@ -205,8 +222,9 @@ export default function Generator() {
       setResultId(res.data.id);
       setResultModel("Luchii Prime");
       setLastDraft(null);
+      setBeforeImage(null);
       setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K", model: "Luchii Prime" }, ...h].slice(0, 8));
-      toast.success("Enhanced & upscaled (AI 4K re-render)!");
+      toast.success("Upscaled to 4K with Luchii Prime super-resolution!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upscale failed. Please try again.");
     } finally {
@@ -329,7 +347,7 @@ export default function Generator() {
 
             {mode === "image" && (
               <p data-testid="painterx-hint" className="text-[11px] text-neutral-500 -mt-3">
-                Painter-X follows plain edit commands, like "make it snowy" or "turn day into night", and keeps your layout.
+                Painter-X follows plain edit commands, like “make it snowy” or “turn day into night”, keeps your layout and finishes in HD. Describe the change you want to see in the photo.
               </p>
             )}
 
@@ -392,22 +410,37 @@ export default function Generator() {
 
         {/* Canvas */}
         <div className="space-y-6 lg:order-1">
-          <div className="rounded-2xl border border-white/10 bg-[#1E2327] aspect-video grid place-items-center overflow-hidden relative">
+          <div data-testid="result-canvas" className="rounded-2xl border border-white/10 bg-[#1E2327] aspect-video grid place-items-center overflow-hidden relative isolate">
             {loading ? (
-              <div data-testid={queued ? "image-queue-notice" : "image-loading"}>
-                <LogoLoader
-                  label={queued ? "Your image is in the queue..." : renderingFull ? "Rendering full quality..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
-                  sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next."
-                    : renderingFull ? "Luchii Nova-Muse full photoreal render · about 2 minutes"
-                    : mode === "image" ? "Luchii Painter-X is applying your edit · about 3 minutes"
-                    : isNova ? (draftMode ? "Luchii Nova-Muse quick draft · under a minute" : "Luchii Nova-Muse photoreal render · about 2 minutes")
-                    : "Powered by Frasberg"}
-                />
-              </div>
+              <>
+                {mode === "image" && refImage && (
+                  <img src={refImage} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-35" />
+                )}
+                <div data-testid={queued ? "image-queue-notice" : "image-loading"} className="text-center px-4">
+                  <LogoLoader
+                    label={queued ? "Your image is in the queue..." : renderingFull ? "Rendering full quality..." : mode === "image" ? "Remixing your image..." : "Dreaming up your image..."}
+                    sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next."
+                      : renderingFull ? "Luchii Nova-Muse full photoreal render + HD finish"
+                      : mode === "image" ? "Luchii Painter-X is applying your edit, then Luchii Prime sharpens it to HD"
+                      : isNova ? (draftMode ? "Luchii Nova-Muse quick draft" : "Luchii Nova-Muse photoreal render + HD finish")
+                      : "Powered by Frasberg · HD finish by Luchii Prime"}
+                  />
+                  <RenderProgress queued={queued}
+                    eta={renderingFull ? 130 : mode === "image" ? 170 : isNova ? (draftMode ? 50 : 130) : 35} />
+                </div>
+              </>
             ) : image ? (
               <>
-                <img data-testid="result-image" src={image} alt="Generated" className="w-full h-full object-contain" />
-                <LuchiiBadge overlay model={resultModel} testId="result-luchii-badge" />
+                <img src={image} alt="" aria-hidden className="absolute inset-0 -z-10 w-full h-full object-cover scale-110 blur-2xl opacity-30" />
+                <img data-testid="result-image" src={comparing && beforeImage ? beforeImage : image} alt="Generated"
+                  onLoad={(e) => !comparing && setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+                  className="w-full h-full object-contain" />
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                  {comparing && beforeImage && (
+                    <span data-testid="compare-before-label" className="rounded-full bg-black/75 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">ORIGINAL</span>
+                  )}
+                  <LuchiiBadge model={resultModel} testId="result-luchii-badge" className="!max-w-none" />
+                </div>
                 {lastDraft && (
                   <div className="absolute top-4 left-4 flex items-center gap-2">
                     <span data-testid="draft-badge" className="rounded-full bg-black/70 backdrop-blur px-3 py-1 text-[11px] font-semibold tracking-wide">DRAFT</span>
@@ -418,26 +451,45 @@ export default function Generator() {
                   </div>
                 )}
                 {upscaling && (
-                  <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
-                    <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>
-                      <LogoLoader label={queued ? "Your upscale is in the queue..." : "Enhancing to 4K..."}
-                        sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "AI detail re-render"} />
+                  <div className="absolute inset-0 z-20 bg-black/75 backdrop-blur-md grid place-items-center">
+                    <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"} className="text-center px-4">
+                      <LogoLoader label={queued ? "Your upscale is in the queue..." : "Upscaling to 4K..."}
+                        sublabel={queued ? "Frasberg Creator is finishing another image. Yours starts next." : "Luchii Prime super-resolution · 3840px"} />
+                      <RenderProgress queued={queued} eta={160} testId="upscale-progress" />
                     </div>
                   </div>
                 )}
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                  <button data-testid="upscale-btn" onClick={handleUpscale} disabled={upscaling}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-4 py-2 text-sm font-semibold hover:bg-[#00d4de] disabled:opacity-60">
-                    <Maximize2 className="w-4 h-4" /> Upscale to 4K
-                  </button>
-                  <button onClick={handleShare}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
-                    <Share2 className="w-4 h-4" /> Share
-                  </button>
-                  <button onClick={() => downloadWithLuchii(image, "frasberg-creator.png", resultModel)} data-testid="result-download-btn"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
-                    <Download className="w-4 h-4" /> Download
-                  </button>
+                <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-end justify-between gap-2 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/30 to-transparent pt-10">
+                  <div className="flex items-center gap-2">
+                    {dims && (
+                      <span data-testid="result-resolution" className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-3 py-1.5 text-[11px] font-semibold tabular-nums">
+                        {is4k ? "4K" : Math.max(dims.w, dims.h) >= 1000 ? "HD" : "SD"} · {dims.w}×{dims.h}
+                      </span>
+                    )}
+                    {beforeImage && (
+                      <button data-testid="compare-btn" type="button"
+                        onMouseDown={() => setComparing(true)} onMouseUp={() => setComparing(false)} onMouseLeave={() => setComparing(false)}
+                        onTouchStart={() => setComparing(true)} onTouchEnd={() => setComparing(false)}
+                        onKeyDown={(e) => e.key === " " && setComparing(true)} onKeyUp={() => setComparing(false)}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-3.5 py-1.5 text-xs font-medium hover:bg-black select-none">
+                        <SplitSquareHorizontal className="w-3.5 h-3.5" /> Hold to compare
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button data-testid="upscale-btn" onClick={handleUpscale} disabled={upscaling || is4k}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#00F0FF] text-black px-4 py-2 text-sm font-semibold hover:bg-[#00d4de] disabled:opacity-60">
+                      {is4k ? (<><CheckCircle2 className="w-4 h-4" /> 4K ready</>) : (<><Maximize2 className="w-4 h-4" /> Upscale to 4K</>)}
+                    </button>
+                    <button onClick={handleShare} data-testid="result-share-btn"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
+                      <Share2 className="w-4 h-4" /> Share
+                    </button>
+                    <button onClick={() => downloadWithLuchii(image, is4k ? "frasberg-creator-4k.jpg" : "frasberg-creator.png", resultModel)} data-testid="result-download-btn"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
+                      <Download className="w-4 h-4" /> Download
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
@@ -453,7 +505,7 @@ export default function Generator() {
               <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
               <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                 {history.map((h, i) => (
-                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); setLastDraft(null); }}
+                  <button key={i} onClick={() => openHistory(h)} data-testid={`history-item-${i}`}
                     className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
                     <img src={h.url} alt="" className="w-full h-full object-cover" />
                   </button>

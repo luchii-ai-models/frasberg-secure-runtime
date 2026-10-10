@@ -5,7 +5,7 @@ import json
 import pytest
 import requests
 
-BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://frasberg-secure-1.preview.emergentagent.com"
+BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://screenshot-sync-4.preview.emergentagent.com"
 PLATFORM_KEY = "frb_live_57d798ce654b65b02abe0d76d29e22a855ecf82e"
 
 

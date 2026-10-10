@@ -227,7 +227,22 @@ async def save_generation(kind: str, prompt: str, image: str, session_id: Option
         "user_id": user["id"] if user else None, "author": user.get("name") if user else None,
         "created_at": now_iso(),
     }
+    if image and len(image) > LIST_THUMB_OVER:
+        try:  # 4K / HD images: lists send a light preview, the full file loads on open/download
+            doc["thumb_base64"] = await asyncio.to_thread(local_engines.preview, image)
+        except Exception:  # noqa: BLE001
+            logger.exception("Preview for generation failed")
     await db.generations.insert_one(doc.copy())
+    return doc
+
+
+LIST_THUMB_OVER = 900_000  # base64 chars
+
+
+def _listed(doc: dict) -> dict:
+    thumb = doc.pop("thumb_base64", None)
+    if thumb:
+        doc["image_base64"], doc["has_full"] = thumb, True
     return doc
 
 
@@ -426,13 +441,13 @@ async def tts(body: TTSIn):
 @api.get("/generations")
 async def generations(session_id: str, limit: int = 8):
     cur = db.generations.find({"session_id": session_id, "image_base64": {"$ne": None}}, {"_id": 0})
-    return await cur.sort("created_at", -1).limit(min(limit, 60)).to_list(None)
+    return [_listed(d) for d in await cur.sort("created_at", -1).limit(min(limit, 60)).to_list(None)]
 
 
 @api.get("/my/generations")
 async def my_generations(limit: int = 60, user: dict = Depends(current_user)):
     cur = db.generations.find({"user_id": user["id"], "image_base64": {"$ne": None}}, {"_id": 0})
-    return await cur.sort("created_at", -1).limit(min(limit, 200)).to_list(None)
+    return [_listed(d) for d in await cur.sort("created_at", -1).limit(min(limit, 200)).to_list(None)]
 
 
 @api.get("/showcase")

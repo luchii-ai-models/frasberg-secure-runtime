@@ -32,7 +32,7 @@ export async function downloadWithLuchii(src, filename, model = "Luchii") {
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "middle";
     ctx.fillText(model, x + s + pad * 0.8, y + h / 2);
-    a.href = c.toDataURL("image/png");
+    a.href = /\.jpe?g$/i.test(filename) ? c.toDataURL("image/jpeg", 0.95) : c.toDataURL("image/png");
   } catch (_) {
     a.href = src;
   }

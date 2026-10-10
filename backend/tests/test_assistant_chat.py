@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://frasberg-secure-1.preview.emergentagent.com"
+BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://screenshot-sync-4.preview.emergentagent.com"
 ADMIN = ("admin.tester@luchiiapp.com", "Admin123!")
 MOTION = ("motion.tester@luchiiapp.com", "Motion123!")
 

@@ -272,7 +272,13 @@ export default function Gallery() {
                         className="text-white/80 hover:text-white" title="Copy share link">
                         <Share2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => downloadWithLuchii(g.image_base64, `frasberg-creator-${g.id.slice(0, 8)}.png`, luchiiModelFor(g.kind, g.style))}
+                      <button onClick={async () => {
+                          let src = g.image_base64;
+                          if (g.has_full) { // list shows a light preview of HD/4K images; download the full file
+                            try { src = (await axios.get(`${API}/share/${g.id}`)).data.image_base64 || src; } catch (_) { /* use preview */ }
+                          }
+                          downloadWithLuchii(src, `frasberg-creator-${g.id.slice(0, 8)}.${g.has_full ? "jpg" : "png"}`, luchiiModelFor(g.kind, g.style, null, g.model));
+                        }}
                         data-testid={`gallery-download-${g.id}`} className="text-white/80 hover:text-white" title="Download">
                         <Download className="w-4 h-4" />
                       </button>
