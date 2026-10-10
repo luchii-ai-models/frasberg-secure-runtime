@@ -11,7 +11,7 @@ export const navLinks = [
   { label: "Tools", href: "#tools" },
   { label: "Models", href: "/models" },
   { label: "API", href: "/developers" },
-  { label: "About Luchii", href: "/about-luchii", luchii: true },
+  { label: "Luchii Code", href: "/about-luchii", luchii: true },
 ];
 
 export const heroPills = [
@@ -120,7 +120,7 @@ export const faqs = [
 export const footerCols = [
   { title: "Product", links: ["Audio", "3D", "Spaces", "Image", "Video", "API"] },
   { title: "Tools", links: ["Image Generator", "Upscaler", "Background Remover", "Photo Editor", "Text to Speech"] },
-  { title: "Company", links: ["About Luchii", "About", "Careers", "Blog", "Originals", "Contact"] },
+  { title: "Company", links: ["Luchii Code", "About", "Careers", "Blog", "Originals", "Contact"] },
   { title: "Resources", links: ["Help center", "Enterprise", "Community", "Status"] },
 ];
 

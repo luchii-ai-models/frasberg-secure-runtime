@@ -69,7 +69,7 @@ export default function Share() {
         ) : (
           <div className="grid lg:grid-cols-[1.4fr_1fr] gap-8 items-start">
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#1E2327]">
-              <LuchiiBadge overlay model={luchiiModelFor(data.kind, data.style)} testId="share-luchii-badge" />
+              <LuchiiBadge overlay model={luchiiModelFor(data.kind, data.style, null, data.model)} testId="share-luchii-badge" />
               <img src={data.image_base64} alt={data.prompt} className="w-full object-contain max-h-[70vh]" />
             </div>
             <div className="lg:pt-4">
@@ -83,7 +83,7 @@ export default function Share() {
                 <p className="text-sm text-neutral-400 mt-3">Created by {data.author}</p>
               )}
               <div className="flex flex-wrap gap-3 mt-7">
-                <a href="#download" data-testid="share-download-btn" onClick={(e) => { e.preventDefault(); downloadWithLuchii(data.image_base64, "frasberg-creator.png", luchiiModelFor(data.kind, data.style)); }}>
+                <a href="#download" data-testid="share-download-btn" onClick={(e) => { e.preventDefault(); downloadWithLuchii(data.image_base64, "frasberg-creator.png", luchiiModelFor(data.kind, data.style, null, data.model)); }}>
                   <Button className="bg-[#00F0FF] text-black hover:bg-[#00d4de] font-semibold rounded-full">
                     <Download className="w-4 h-4 mr-2" /> Download
                   </Button>

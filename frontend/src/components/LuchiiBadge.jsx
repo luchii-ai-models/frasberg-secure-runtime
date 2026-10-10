@@ -4,8 +4,18 @@ import { brand } from "../mock";
 const IMAGE_MODELS = { edit: "Luchii Painter-X", upscale: "Luchii Prime" };
 const STYLE_MODELS = { anime: "Luchii Dreamline", "digital-art": "Luchii Dreamline", "3d": "Luchii Vision" };
 
-export const luchiiModelFor = (kind, style, mode) =>
-  kind === "video" ? (mode === "image-to-video" ? "Luchii Animus" : "Luchii Cinematica")
+export const LUCHII_PICKER = {
+  text: [
+    { name: "Luchii Nova-Muse", desc: "Versatile, top quality" },
+    { name: "Luchii Dreamline", desc: "Painterly, vivid color" },
+    { name: "Luchii Vision", desc: "Concept art worlds" },
+  ],
+  image: [{ name: "Luchii Painter-X", desc: "Remix any photo" }],
+};
+
+export const luchiiModelFor = (kind, style, mode, model) =>
+  model ? model
+    : kind === "video" ? (mode === "image-to-video" ? "Luchii Animus" : "Luchii Cinematica")
     : kind === "music" ? "Luchii Harmonia"
     : IMAGE_MODELS[kind] || STYLE_MODELS[style] || "Luchii Nova-Muse";
 

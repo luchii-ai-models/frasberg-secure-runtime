@@ -132,7 +132,7 @@ const useModelFilter = (list, modelOf) => {
 };
 
 const videoModel = (v) => luchiiModelFor("video", null, v.mode);
-const imageModel = (g) => luchiiModelFor(g.kind, g.style);
+const imageModel = (g) => luchiiModelFor(g.kind, g.style, null, g.model);
 
 function VideosList({ videos }) {
   const f = useModelFilter(videos, videoModel);

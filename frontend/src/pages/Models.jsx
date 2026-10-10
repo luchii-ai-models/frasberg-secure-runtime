@@ -18,7 +18,7 @@ export default function Models() {
       toast("Coming soon", { description: `${m.name} is on the way. Stay tuned!` });
       return;
     }
-    navigate(m.route || `/create?mode=${m.mode || "text"}`);
+    navigate(m.route || `/create?mode=${m.mode || "text"}${m.name.startsWith("Luchii") ? `&model=${encodeURIComponent(m.name)}` : ""}`);
   };
 
   const families = modelFamilies

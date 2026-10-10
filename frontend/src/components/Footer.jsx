@@ -28,7 +28,7 @@ export default function Footer() {
               <ul className="space-y-2.5">
                 {col.links.map((l) => (
                   <li key={l}>
-                    {l === "About Luchii" ? (
+                    {l === "Luchii Code" ? (
                       <Link to="/about-luchii" data-testid="footer-about-luchii-link" className="text-sm text-neutral-500 hover:text-white transition-colors">{l}</Link>
                     ) : (
                       <a href="#" className="text-sm text-neutral-500 hover:text-white transition-colors">{l}</a>

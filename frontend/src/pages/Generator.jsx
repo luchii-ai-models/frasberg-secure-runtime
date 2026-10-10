@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
+import { LuchiiBadge, luchiiModelFor, LUCHII_PICKER } from "../components/LuchiiBadge";
 import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
@@ -64,6 +64,7 @@ export default function Generator() {
   const [image, setImage] = useState(null);
   const [resultId, setResultId] = useState(null);
   const [resultModel, setResultModel] = useState("Luchii Nova-Muse");
+  const [pickModel, setPickModel] = useState(() => LUCHII_PICKER.text.some((m) => m.name === searchParams.get("model")) ? searchParams.get("model") : "Luchii Nova-Muse");
   const [history, setHistory] = useState([]);
 
   // Apply tool preset from URL (?mode=text|image&preset=...)
@@ -80,7 +81,7 @@ export default function Generator() {
         const res = await axios.get(`${API}/generations`, {
           params: { session_id: getSessionId(), limit: 8 },
         });
-        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style) })));
+        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style, null, g.model) })));
       } catch (e) { /* non-critical */ }
     };
     load();
@@ -136,12 +137,12 @@ export default function Generator() {
           { prompt, image_base64: refImage, session_id: getSessionId() }, authHeader, markQueued);
       } else {
         res = await postQueued(`${API}/generate`,
-          { prompt, style, aspect_ratio: aspect, session_id: getSessionId() }, authHeader, markQueued);
+          { prompt, style, aspect_ratio: aspect, model: pickModel, session_id: getSessionId() }, authHeader, markQueued);
       }
       const url = res.data.image_base64;
       setImage(url);
       setResultId(res.data.id);
-      const model = luchiiModelFor(res.data.kind, res.data.style);
+      const model = luchiiModelFor(res.data.kind, res.data.style, null, res.data.model);
       setResultModel(model);
       setHistory((h) => [{ id: res.data.id, url, prompt, model }, ...h].slice(0, 8));
       toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
@@ -223,6 +224,26 @@ export default function Generator() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#1E2327] p-5 space-y-5">
+            <div data-testid="luchii-model-picker">
+              <label className="text-sm font-medium mb-2 block">Luchii model</label>
+              <div className="grid grid-cols-1 gap-1.5">
+                {LUCHII_PICKER[mode].map((m) => {
+                  const on = mode === "image" || pickModel === m.name;
+                  return (
+                    <button key={m.name} type="button" onClick={() => mode === "text" && setPickModel(m.name)}
+                      data-testid={`luchii-model-${m.name.split(" ")[1].toLowerCase()}`} aria-pressed={on}
+                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${on
+                        ? "border-[#00F0FF]/70 bg-[#00F0FF]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+                      <img src={brand.luchiiLogo} alt="" className="w-7 h-7 rounded-full object-contain shrink-0" />
+                      <span className="min-w-0">
+                        <span className="flex items-baseline gap-2 min-w-0"><span className="text-xs font-semibold whitespace-nowrap">{m.name}</span>
+                        <span className="text-[11px] text-neutral-500 truncate">{m.desc}</span></span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {mode === "image" && (
               <div>
                 <label className="text-sm font-medium mb-2 block">Reference image</label>
