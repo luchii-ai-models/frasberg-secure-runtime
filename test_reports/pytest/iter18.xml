@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="11" skipped="0" tests="35" time="9.990" timestamp="2026-10-10T06:05:43.887995+00:00" hostname="agent-env-b46846a5-88ec-40b8-8362-5bce831bab47"><testcase classname="tests.test_videos_api" name="test_videos_requires_auth" time="0.277" /><testcase classname="tests.test_luchii_chat" name="test_chat_models_public" time="0.921" /><testcase classname="tests.test_videos_api" name="test_videos_list_ok" time="0.510"><failure message="assert 0 &gt;= 2&#10; +  where 0 = len([])">backend/tests/test_videos_api.py:43: in test_videos_list_ok
+    assert len(data) &gt;= 2
+E   assert 0 &gt;= 2
+E    +  where 0 = len([])</failure></testcase><testcase classname="tests.test_videos_api" name="test_videos_mode_mapping" time="0.117"><failure message="KeyError: 'eff23281-ece7-4bde-a624-80fe892fae2d'">backend/tests/test_videos_api.py:59: in test_videos_mode_mapping
+    assert by_id[VID_93]["mode"] == "image-to-video"
+           ^^^^^^^^^^^^^
+E   KeyError: 'eff23281-ece7-4bde-a624-80fe892fae2d'</failure></testcase><testcase classname="tests.test_luchii_chat" name="test_conversations_no_auth_401" time="0.133" /><testcase classname="tests.test_videos_api" name="test_legacy_engine_label" time="0.134"><failure message="KeyError: 'cfde8c3d-434b-450c-a7a9-6940987fe8bc'">backend/tests/test_videos_api.py:69: in test_legacy_engine_label
+    assert by_id[VID_LITE]["engine"] == "Frasberg Lite (CPU)"
+           ^^^^^^^^^^^^^^^
+E   KeyError: 'cfde8c3d-434b-450c-a7a9-6940987fe8bc'</failure></testcase><testcase classname="tests.test_videos_api" name="test_get_video_public_ok" time="0.369"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_videos_api.py:74: in test_get_video_public_ok
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_luchii_chat" name="test_conversations_jwt_200" time="0.508" /><testcase classname="tests.test_videos_api" name="test_get_video_lite_public" time="0.183"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_videos_api.py:84: in test_get_video_lite_public
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_luchii_chat" name="test_conversations_platform_key_200" time="0.142" /><testcase classname="tests.test_videos_api" name="test_get_video_404" time="0.122" /><testcase classname="tests.test_videos_api" name="test_media_stream_ok" time="0.120"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_videos_api.py:97: in test_media_stream_ok
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_agents_bundle.TestAgentBundle" name="test_bundle_unauth_returns_401" time="0.133" /><testcase classname="tests.test_agents_bundle.TestAgentBundle" name="test_bundle_create_and_order" time="0.534" /><testcase classname="tests.test_agents_bundle.TestAgentBundle" name="test_bundle_status_sorted" time="0.166" /><testcase classname="tests.test_agents_bundle.TestAgentBundle" name="test_bundle_other_user_404" time="0.760" /><testcase classname="tests.test_agents_bundle.TestAgentBundle" name="test_bundle_unknown_id_404" time="0.132" /><testcase classname="tests.test_assistant_chat.TestAuthAndGpuAdmin" name="test_admin_login" time="0.392" /><testcase classname="tests.test_assistant_chat.TestAuthAndGpuAdmin" name="test_motion_login" time="0.378" /><testcase classname="tests.test_assistant_chat.TestAuthAndGpuAdmin" name="test_gpu_admin_overview_admin_ok" time="0.604" /><testcase classname="tests.test_assistant_chat.TestAuthAndGpuAdmin" name="test_gpu_admin_overview_motion_forbidden" time="0.667" /><testcase classname="tests.test_luchii_chat" name="test_chat_conversation_get" time="4.002" /><testcase classname="tests.test_luchii_chat" name="test_chat_other_owner_404" time="0.398" /><testcase classname="tests.test_agents_bundle.TestVideoLuchiiModel" name="test_video_auto_without_image_picks_cinematica" time="0.573" /><testcase classname="tests.test_luchii_chat" name="test_chat_delete" time="0.309" /><testcase classname="tests.test_agents_bundle.TestVideoLuchiiModel" name="test_video_auto_with_image_picks_animus" time="0.128" /><testcase classname="tests.test_agents_bundle.TestVideoLuchiiModel" name="test_video_explicit_cinematica" time="0.130" /><testcase classname="tests.test_luchii_chat" name="test_agent_task_invalid_type" time="0.129" /><testcase classname="tests.test_luchii_mark" name="test_share_includes_kind" time="0.117"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_luchii_mark.py:10: in test_share_includes_kind
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_luchii_chat" name="test_agent_task_music" time="2.367" /><testcase classname="tests.test_luchii_mark" name="test_media_video_download_success" time="0.126"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not ready&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_luchii_mark.py:19: in test_media_video_download_success
+    assert r.status_code == 200, r.text[:400]
+E   AssertionError: {"detail":"Not ready"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_luchii_mark" name="test_media_download_unknown_404" time="0.123" /><testcase classname="tests.test_assistant_chat.TestAssistantChat" name="test_empty_message_422" time="0.112"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 422&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_assistant_chat.py:46: in test_empty_message_422
+    assert r.status_code == 422, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 422
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_assistant_chat.TestAssistantChat" name="test_missing_message_422" time="0.115"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 422&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_assistant_chat.py:50: in test_missing_message_422
+    assert r.status_code == 422, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 422
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_assistant_chat.TestAssistantChat" name="test_chat_returns_503_turbulence" time="0.147"><failure message="AssertionError: Expected 503, got 404: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 503&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_assistant_chat.py:56: in test_chat_returns_503_turbulence
+    assert r.status_code == 503, f"Expected 503, got {r.status_code}: {r.text[:300]}"
+E   AssertionError: Expected 503, got 404: {"detail":"Not Found"}
+E   assert 404 == 503
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase></testsuite></testsuites>
