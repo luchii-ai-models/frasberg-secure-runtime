@@ -5,7 +5,6 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import asyncio
 import hashlib
-import json
 import os
 import re
 import time
@@ -1084,36 +1083,6 @@ async def gpu_admin_notebook(request: Request, gateway: str, models: str = "fras
     nb = frasberg_gpu.build_notebook(gateway, os.environ["FRASBERG_WORKER_SECRET"], ",".join(wanted) or "frasberg-motion-free")
     return Response(content=_json.dumps(nb, indent=1), media_type="application/x-ipynb+json",
                     headers={"Content-Disposition": 'attachment; filename="frasberg-free-gpu-worker.ipynb"'})
-
-
-class ChatIn(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
-    session_id: Optional[str] = None
-
-
-@api.post("/assistant/chat")
-async def assistant_chat(body: ChatIn, user: Optional[dict] = Depends(optional_user)):
-    payload = {"message": body.message, "model": "luchii-6-plus"}
-    if body.session_id:
-        payload["session_id"] = body.session_id
-    last = "Luchii Chat is unavailable right now"
-    async with httpx.AsyncClient(timeout=90) as hc:
-        for i in key_order("chat"):
-            try:
-                r = await hc.post(f"{FRASBERG_BASE}/v1/chat", json=payload,
-                                  headers={"Authorization": f"Bearer {FRASBERG_KEYS[i]}"})
-            except httpx.HTTPError as e:
-                last = str(e)
-                continue
-            if r.status_code >= 400:
-                last = upstream_detail(r)
-                continue
-            text = "".join(json.loads(f'"{m.group(1)}"') for m in re.finditer(r'"delta":\s*"((?:[^"\\]|\\.)*)"', r.text))
-            sid = (re.search(r'"session_id":\s*"([^"]+)"', r.text) or [None, body.session_id])[1]
-            if text.strip() and "turbulence" not in text.lower():
-                return {"reply": text.strip(), "session_id": sid, "engine": "luchii-6-plus"}
-            last = "Luchii Chat (Frasberg) is replying with a turbulence error"
-    raise HTTPException(status_code=503, detail=last)
 
 
 app.include_router(api)

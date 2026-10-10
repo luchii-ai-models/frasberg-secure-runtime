@@ -22,7 +22,6 @@ import ModelShare from "./pages/ModelShare";
 import Spaces from "./pages/Spaces";
 import SpaceEditor from "./pages/SpaceEditor";
 import SpaceView from "./pages/SpaceView";
-import { AssistantChat } from "./components/AssistantChat";
 
 function App() {
   return (
@@ -55,7 +54,6 @@ function App() {
             </Routes>
           </FrasbergStarfieldLayout>
         </BrowserRouter>
-        <AssistantChat />
         <Toaster position="top-center" theme="dark" />
       </AuthProvider>
     </div>

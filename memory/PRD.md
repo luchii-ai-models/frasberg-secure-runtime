@@ -20,7 +20,7 @@ Import and clone an exact copy of luchii-ai.com (tools, files, database, feature
 ## Backlog
 - P0: Get Frasberg image and voice endpoints healthy. Grant text_to_speech permission to the keys.
 - P1: Speech to Speech, 3D Studio, Spaces Builder (still "Soon").
-- P2: Frasberg chat (luchii-6-plus) assistant inside the app.
+- P2: (dropped by the user) in-app chat assistant.
 
 ## Update (2026-10)
 - In-house Luchii engines are used when a Frasberg-keyed call fails: Piper voices (TTS/STS), faster-whisper base (STT), SD-Turbo on CPU (generate/edit/upscale). Models are stored in LUCHII_MODELS_DIR and preloaded at startup.
@@ -98,3 +98,8 @@ Hardware reality of this pod: **2 CPU cores, no AVX2/bf16 hardware, ~6GB effecti
 - Honest UI: a "Preview mode" banner shows when no GPU is online, and Lite clips are labelled "Preview · animated stills" (studio, gallery, share page). The engine defaults to Motion Free and auto-selects an online engine.
 - Tests: iteration_11 passed 37/37 backend plus all frontend checks.
 - Preview-only admin test account: admin.tester@luchiiapp.com is in ADMIN_EMAILS in backend/.env.
+
+## Update (2026-06, re-import)
+- Re-imported luchii-ai-models/frasberg-secure-runtime. Recreated backend/.env with the 8 user frb_live keys + FRASBERG_KEY_ROUTES, installed deps + ffmpeg, re-created admin.tester / motion.tester accounts. Smoke tests passed (iteration_12).
+- /status GPU panel polling now pauses when the tab is hidden.
+- P2 in-app chat assistant was built, then REMOVED at the user's request (it is not wanted in the app). Do not re-add it.
