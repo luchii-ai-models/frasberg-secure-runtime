@@ -1,0 +1,20 @@
+{
+  "summary": "Full backend+frontend verification of Luchii logo/model badges and watermarked downloads. Backend: /api/share/TEST-mark-img returns kind='edit'; GET /api/media/TEST-mark-video/download returns 200 video/mp4 with attachment Content-Disposition (served from cached GridFS marked_file_id); unknown id -> 404. Frontend: Desktop navbar shows nav-about-luchii with Luchii logo and navigates to /about-luchii; mobile hamburger (390px) menu contains About Luchii + logo and navigates correctly. /gallery image card TEST-mark-img shows gallery-luchii-badge-TEST-mark-img='Luchii Painter-X'; gallery-download-TEST-mark-img triggers a real canvas-watermarked PNG download (signature 89PNG, size 567664, filename 'frasberg-creator-TEST-mar.png'). Videos tab shows gallery-video-luchii-badge-TEST-mark-video='Luchii Video'; gallery-video-download-TEST-mark-video href points to /api/media/TEST-mark-video/download. /s/TEST-mark-img share-luchii-badge='Luchii Painter-X'; share-download-btn downloads PNG (frasberg-creator.png, PNG signature OK). /v/TEST-mark-video video-share-luchii-badge='Luchii Video' and video-share-download-btn href ends with /download. Code review of Generator/Studio/Share/VideoShare/Gallery confirms resultModel mapping (edit->Painter-X, upscale->Prime, anime/digital-art->Dreamline, 3d->Vision, default Nova-Muse) and downloadWithLuchii usage.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_luchii_mark.py", "/app/test_reports/pytest/iter14.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LuchiiBadge.luchiiModelFor correctly maps kind/style to the right Luchii model name; downloadWithLuchii renders a bottom-right pill with logo + model into the PNG before saving.",
+    "backend media_download caches marked video via GridFS (marked_file_id) and reuses on subsequent requests - good; ffmpeg overlay is pre-done for the seed row so no CPU hit during this test.",
+    "/api/share/{id} now exposes `kind` so Share.jsx can derive the right model name for images (edit->Painter-X, etc.)."
+  ],
+  "updated_files": ["/app/backend/tests/test_luchii_mark.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "motion.tester@luchiiapp.com / Motion123! (login POST /api/auth/login).",
+  "seed_data_creation": "Used pre-seeded TEST-mark-img (generations, kind=edit) and TEST-mark-video (jobs, local engine, marked_file_id already cached).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login via browser fetch to /api/auth/login then localStorage.setItem('luchii_token', token) before visiting protected routes to avoid AuthModal overlay. For mobile menu, use page.get_by_role('button', name='About Luchii').click(force=True) rather than iterating buttons.",
+  "rca of the issue": "No issues."
+}
