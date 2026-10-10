@@ -34,7 +34,7 @@ function TaskCard({ t }) {
   const failed = t.status === "failed" || job?.status === "failed";
   const done = t.type === "image" ? !!img : job?.status === "completed";
   const src = job?.url ? `${BASE}${job.url}` : null;
-  const state = failed ? "Failed" : done ? "Done" : t.status === "queued" ? "Waiting for its turn" : job?.status === "running" ? `Working${job.progress ? ` · ${job.progress}%` : "..."}` : "Working...";
+  const state = failed ? "Failed" : done ? "Done" : t.status === "queued" || t.status === "waiting" ? "Waiting for its turn" : job?.status === "running" ? `Working${job.progress ? ` · ${job.progress}%` : "..."}` : "Working...";
   return (
     <div data-testid={`agent-task-${t.type}`} className="rounded-2xl border border-white/10 bg-[#1E2327]/80 p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">

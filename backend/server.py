@@ -1256,8 +1256,16 @@ async def chat_send(body: ChatSendIn, owner: str = Depends(chat_owner)):
 async def _run_agent_task(task: dict, user: Optional[dict]):
     try:
         if task["type"] == "image":
-            res = await generate(GenerateIn(prompt=task["prompt"], style=task.get("style") or "cinematic",
-                                            model=task.get("model")), user)
+            body = GenerateIn(prompt=task["prompt"], style=task.get("style") or "cinematic", model=task.get("model"))
+            for attempt in range(60):
+                try:
+                    res = await generate(body, user)
+                    break
+                except HTTPException as e:
+                    if e.status_code != 429 or attempt == 59:
+                        raise
+                    await db.agent_tasks.update_one({"id": task["id"]}, {"$set": {"status": "waiting", "updated_at": now_iso()}})
+                    await asyncio.sleep(10)
             result = {"generation_id": res["id"], "share_url": f"/s/{res['id']}"}
         else:
             res = await create_media_job(task["type"], JobIn(prompt=task["prompt"], style=task.get("style"),
