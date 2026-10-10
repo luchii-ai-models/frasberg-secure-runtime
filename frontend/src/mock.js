@@ -11,6 +11,7 @@ export const navLinks = [
   { label: "Tools", href: "#tools" },
   { label: "Models", href: "/models" },
   { label: "API", href: "/developers" },
+  { label: "About Luchii", href: "/about-luchii", luchii: true },
 ];
 
 export const heroPills = [

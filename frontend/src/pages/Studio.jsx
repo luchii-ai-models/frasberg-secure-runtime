@@ -311,7 +311,7 @@ export default function Studio({ kind }) {
               {kind === "video"
                 ? <video src={src} controls autoPlay loop playsInline className={`rounded-xl border border-white/10 ${aspect === "9:16" ? "max-h-[70vh] mx-auto" : "w-full"}`} />
                 : <audio src={src} controls autoPlay className="w-full" />}
-              <LuchiiBadge testId={`${kind}-luchii-badge`} />
+              <LuchiiBadge model={kind === "video" ? "Luchii Video" : "Luchii Audio"} testId={`${kind}-luchii-badge`} />
               {kind === "video" && isPreviewEngine(job.engine) && (
                 <span data-testid="video-preview-badge" className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-200">
                   <Info className="w-3 h-3" /> Preview · animated stills
@@ -320,7 +320,7 @@ export default function Studio({ kind }) {
               <p className="text-xs text-neutral-500" data-testid={`${kind}-result-meta`}>
                 “{job.prompt}” · {job.style || "no style"} · {job.duration}s{job.engine ? ` · ${job.engine}` : ""}{job.mode === "image-to-video" ? " · image-to-video" : ""}
               </p>
-              <a href={src} download={`luchii-${kind}-${job.job_id.slice(0, 8)}.${kind === "video" ? "mp4" : "wav"}`}
+              <a href={src.includes("/api/media/") ? `${src}/download` : src} download={`luchii-${kind}-${job.job_id.slice(0, 8)}.${kind === "video" ? "mp4" : "wav"}`}
                 data-testid={`${kind}-download-btn`}
                 className="flex items-center justify-center w-full h-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-sm">
                 <Download className="w-4 h-4 mr-2" /> Download

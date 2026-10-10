@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { LuchiiBadge } from "../components/LuchiiBadge";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
+import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Sparkles, ArrowLeft, Download, ImageIcon, Loader2, Wand2, Share2, AudioLines, Box, Search, Clapperboard, RotateCcw, ExternalLink } from "lucide-react";
@@ -82,7 +83,7 @@ function VideoCard({ v }) {
         <video ref={ref} src={`${src}#t=0.1`} muted loop playsInline preload="metadata" controls
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()}
           className="absolute inset-0 w-full h-full object-contain" data-testid={`gallery-video-player-${v.id}`} />
-        <LuchiiBadge overlay className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
+        <LuchiiBadge overlay model="Luchii Video" className="!bottom-12" testId={`gallery-video-luchii-badge-${v.id}`} />
         <span className="absolute top-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#00F0FF]">
           {v.mode === "image-to-video" ? "Photo → video" : "Text → video"}
         </span>
@@ -97,7 +98,7 @@ function VideoCard({ v }) {
           <div className="flex items-center gap-2.5 shrink-0">
             <button onClick={replay} title="Replay" data-testid={`gallery-video-replay-${v.id}`} className="text-white/70 hover:text-white"><RotateCcw className="w-4 h-4" /></button>
             <button onClick={() => shareVideo(v.id)} title="Share" data-testid={`gallery-video-share-${v.id}`} className="text-white/70 hover:text-white"><Share2 className="w-4 h-4" /></button>
-            <a href={src} download={`frasberg-motion-${v.id.slice(0, 8)}.mp4`} title="Download" data-testid={`gallery-video-download-${v.id}`} className="text-white/70 hover:text-white"><Download className="w-4 h-4" /></a>
+            <a href={`${src}/download`} download={`luchii-video-${v.id.slice(0, 8)}.mp4`} title="Download" data-testid={`gallery-video-download-${v.id}`} className="text-white/70 hover:text-white"><Download className="w-4 h-4" /></a>
             <Link to={`/v/${v.id}`} title="Open" data-testid={`gallery-video-open-${v.id}`} className="text-white/70 hover:text-white"><ExternalLink className="w-4 h-4" /></Link>
           </div>
         </div>
@@ -222,7 +223,7 @@ export default function Gallery() {
             {items.map((g) => (
               <div key={g.id} className="group relative rounded-xl overflow-hidden border border-white/10 bg-[#1E2327]">
                 <img src={g.image_base64} alt={g.prompt} className="w-full aspect-square object-cover" />
-                <LuchiiBadge overlay className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
+                <LuchiiBadge overlay model={luchiiModelFor(g.kind, g.style)} className="!top-2 !bottom-auto" testId={`gallery-luchii-badge-${g.id}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="absolute bottom-0 inset-x-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="text-xs text-neutral-200 line-clamp-2">{g.prompt}</p>
@@ -237,9 +238,10 @@ export default function Gallery() {
                         className="text-white/80 hover:text-white" title="Copy share link">
                         <Share2 className="w-4 h-4" />
                       </button>
-                      <a href={g.image_base64} download className="text-white/80 hover:text-white" title="Download">
+                      <button onClick={() => downloadWithLuchii(g.image_base64, `frasberg-creator-${g.id.slice(0, 8)}.png`, luchiiModelFor(g.kind, g.style))}
+                        data-testid={`gallery-download-${g.id}`} className="text-white/80 hover:text-white" title="Download">
                         <Download className="w-4 h-4" />
-                      </a>
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -46,7 +46,7 @@ export default function VideoShare() {
           {error ? <p className="text-neutral-500" data-testid="video-share-error">{error}</p>
             : !video ? <Loader2 className="w-8 h-8 animate-spin text-[#00F0FF]" />
             : <video ref={ref} data-testid="video-share-player" src={src} controls autoPlay loop muted playsInline className="w-full h-full object-contain" />}
-          {video && !error && <LuchiiBadge overlay className="!top-3 !right-3 !bottom-auto" testId="video-share-luchii-badge" />}
+          {video && !error && <LuchiiBadge overlay model="Luchii Video" className="!top-3 !right-3 !bottom-auto" testId="video-share-luchii-badge" />}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3 justify-center">
@@ -60,7 +60,7 @@ export default function VideoShare() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm hover:bg-white/10">
                 <Share2 className="w-4 h-4" /> Share
               </button>
-              <a data-testid="video-share-download-btn" href={src} download={`frasberg-motion-${video.id.slice(0, 8)}.mp4`}
+              <a data-testid="video-share-download-btn" href={`${src}/download`} download={`luchii-video-${video.id.slice(0, 8)}.mp4`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm hover:bg-white/10">
                 <Download className="w-4 h-4" /> Download .mp4
               </a>

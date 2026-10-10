@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LuchiiBadge } from "../components/LuchiiBadge";
+import { LuchiiBadge, luchiiModelFor } from "../components/LuchiiBadge";
+import { downloadWithLuchii } from "../lib/luchiiMark";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -62,6 +63,7 @@ export default function Generator() {
   };
   const [image, setImage] = useState(null);
   const [resultId, setResultId] = useState(null);
+  const [resultModel, setResultModel] = useState("Luchii Nova-Muse");
   const [history, setHistory] = useState([]);
 
   // Apply tool preset from URL (?mode=text|image&preset=...)
@@ -78,7 +80,7 @@ export default function Generator() {
         const res = await axios.get(`${API}/generations`, {
           params: { session_id: getSessionId(), limit: 8 },
         });
-        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt })));
+        setHistory(res.data.map((g) => ({ id: g.id, url: g.image_base64, prompt: g.prompt, model: luchiiModelFor(g.kind, g.style) })));
       } catch (e) { /* non-critical */ }
     };
     load();
@@ -139,7 +141,9 @@ export default function Generator() {
       const url = res.data.image_base64;
       setImage(url);
       setResultId(res.data.id);
-      setHistory((h) => [{ id: res.data.id, url, prompt }, ...h].slice(0, 8));
+      const model = luchiiModelFor(res.data.kind, res.data.style);
+      setResultModel(model);
+      setHistory((h) => [{ id: res.data.id, url, prompt, model }, ...h].slice(0, 8));
       toast.success(user ? "Saved to your gallery!" : "Image generated with Frasberg Creator!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Generation failed. Please try again.");
@@ -158,7 +162,8 @@ export default function Generator() {
       const url = res.data.image_base64;
       setImage(url);
       setResultId(res.data.id);
-      setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K" }, ...h].slice(0, 8));
+      setResultModel("Luchii Prime");
+      setHistory((h) => [{ id: res.data.id, url, prompt: "Upscaled to 4K", model: "Luchii Prime" }, ...h].slice(0, 8));
       toast.success("Enhanced & upscaled (AI 4K re-render)!");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upscale failed. Please try again.");
@@ -319,7 +324,7 @@ export default function Generator() {
             ) : image ? (
               <>
                 <img data-testid="result-image" src={image} alt="Generated" className="w-full h-full object-contain" />
-                <LuchiiBadge overlay testId="result-luchii-badge" />
+                <LuchiiBadge overlay model={resultModel} testId="result-luchii-badge" />
                 {upscaling && (
                   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center">
                     <div data-testid={queued ? "upscale-queue-notice" : "upscale-loading"}>
@@ -337,10 +342,10 @@ export default function Generator() {
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Share2 className="w-4 h-4" /> Share
                   </button>
-                  <a href={image} download="frasberg-creator.png"
+                  <button onClick={() => downloadWithLuchii(image, "frasberg-creator.png", resultModel)} data-testid="result-download-btn"
                     className="inline-flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur px-4 py-2 text-sm font-medium hover:bg-black">
                     <Download className="w-4 h-4" /> Download
-                  </a>
+                  </button>
                 </div>
               </>
             ) : (
@@ -356,7 +361,7 @@ export default function Generator() {
               <h3 className="text-sm font-medium mb-3 text-neutral-400">Recent generations</h3>
               <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                 {history.map((h, i) => (
-                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); }}
+                  <button key={i} onClick={() => { setImage(h.url); setResultId(h.id); setResultModel(h.model || "Luchii Nova-Muse"); }}
                     className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#00F0FF]/50">
                     <img src={h.url} alt="" className="w-full h-full object-cover" />
                   </button>

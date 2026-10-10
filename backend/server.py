@@ -354,7 +354,7 @@ async def showcase(limit: int = 8):
 @api.get("/share/{gen_id}")
 async def share(gen_id: str):
     doc = await db.generations.find_one({"id": gen_id},
-                                        {"_id": 0, "id": 1, "prompt": 1, "style": 1, "image_base64": 1, "author": 1})
+                                        {"_id": 0, "id": 1, "kind": 1, "prompt": 1, "style": 1, "image_base64": 1, "author": 1})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     return doc
@@ -712,6 +712,43 @@ async def media_file(job_id: str):
         raise HTTPException(status_code=404, detail="Not ready")
     stream = await media_fs.open_download_stream(job["file_id"])
     return Response(content=await stream.read(), media_type=job["mime"], headers={"Accept-Ranges": "none"})
+
+
+LUCHII_MARK = Path(__file__).parent / "assets" / "luchii-logo.png"
+
+
+def _watermark_video(data: bytes) -> bytes:
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d) / "in.mp4", Path(d) / "out.mp4"
+        src.write_bytes(data)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-i", str(LUCHII_MARK), "-filter_complex",
+                        "[1:v][0:v]scale2ref=w=oh*mdar:h=ih*0.14[mk][base];[mk]format=rgba,colorchannelmixer=aa=0.85[m];"
+                        "[base][m]overlay=W-w-W*0.03:H-h-H*0.04",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-c:a", "copy",
+                        "-movflags", "+faststart", str(out)], check=True, timeout=180)
+        return out.read_bytes()
+
+
+@api.get("/media/{job_id}/download")
+async def media_download(job_id: str):
+    job = await db.jobs.find_one({"id": job_id, "status": "completed", "engine": "local"}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Not ready")
+    name = f"luchii-{job['kind']}-{job_id[:8]}.{'mp4' if job['kind'] == 'video' else 'wav'}"
+    headers = {"Content-Disposition": f'attachment; filename="{name}"'}
+    if job["kind"] != "video":
+        stream = await media_fs.open_download_stream(job["file_id"])
+        return Response(content=await stream.read(), media_type=job["mime"], headers=headers)
+    if not job.get("marked_file_id"):
+        raw = await (await media_fs.open_download_stream(job["file_id"])).read()
+        marked = await asyncio.to_thread(_watermark_video, raw)
+        fid = await media_fs.upload_from_stream(name, marked, metadata={"job_id": job_id, "luchii_mark": True})
+        await db.jobs.update_one({"id": job_id}, {"$set": {"marked_file_id": fid}})
+        job["marked_file_id"] = fid
+    stream = await media_fs.open_download_stream(job["marked_file_id"])
+    return Response(content=await stream.read(), media_type="video/mp4", headers=headers)
 
 
 @api.get("/jobs/{job_id}")

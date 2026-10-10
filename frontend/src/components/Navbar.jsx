@@ -74,7 +74,8 @@ export default function Navbar() {
                   isActive(l.href)
                     ? "text-[#00F0FF] bg-white/5"
                     : "text-neutral-300 hover:text-white hover:bg-white/5"
-                }`}>
+                } ${l.luchii ? "flex items-center gap-1.5" : ""}`} data-testid={l.luchii ? "nav-about-luchii" : undefined}>
+                {l.luchii && <img src={brand.luchiiLogo} alt="Luchii logo" className="w-5 h-5 rounded-full object-contain" />}
                 {l.label}
               </button>
             ))}
@@ -131,7 +132,8 @@ export default function Navbar() {
         <div className="md:hidden bg-[#12171B] border-t border-white/5 px-5 py-4 space-y-1">
           {navLinks.map((l) => (
             <button key={l.label} onClick={() => handleNav(l.href)}
-              className="block w-full text-left px-3 py-3 text-neutral-200 hover:text-white rounded-lg hover:bg-white/5">
+              className="flex items-center gap-2 w-full text-left px-3 py-3 text-neutral-200 hover:text-white rounded-lg hover:bg-white/5">
+              {l.luchii && <img src={brand.luchiiLogo} alt="Luchii logo" className="w-5 h-5 rounded-full object-contain" />}
               {l.label}
             </button>
           ))}
