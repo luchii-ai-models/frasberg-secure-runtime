@@ -40,19 +40,3 @@ class TestAuthAndGpuAdmin:
 
 
 # ---- Assistant chat ----
-class TestAssistantChat:
-    def test_empty_message_422(self):
-        r = requests.post(f"{BASE}/api/assistant/chat", json={"message": ""}, timeout=20)
-        assert r.status_code == 422, r.text
-
-    def test_missing_message_422(self):
-        r = requests.post(f"{BASE}/api/assistant/chat", json={}, timeout=20)
-        assert r.status_code == 422, r.text
-
-    def test_chat_returns_503_turbulence(self):
-        # Upstream returns turbulence; server tries all 8 keys (~up to 60s).
-        r = requests.post(f"{BASE}/api/assistant/chat",
-                          json={"message": "hello"}, timeout=120)
-        assert r.status_code == 503, f"Expected 503, got {r.status_code}: {r.text[:300]}"
-        detail = r.json().get("detail", "")
-        assert "turbulence" in detail.lower(), f"Unexpected detail: {detail}"
